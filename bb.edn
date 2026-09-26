@@ -8,5 +8,7 @@
                :task (setup/init *command-line-args*)}
   runtime     {:doc  "Switch the agent runtime: bb runtime fake|docker"
                :task (setup/set-runtime *command-line-args*)}
+  auth        {:doc  "Choose how agents authenticate: bb auth subscription|api-key"
+               :task (setup/set-auth *command-line-args*)}
   build-image {:doc  "Build the Docker image that agents run in"
                :task (setup/build-image)}}}

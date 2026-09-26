@@ -23,11 +23,20 @@
   (zero? (:exit (proc/sh ["git" "-C" (str repo) "merge-base" "--is-ancestor"
                           ancestor descendant]))))
 
+(def excluded-paths
+  "Claude Code configuration that must not reach an agent from the project:
+  instructions (CLAUDE.md), settings and hooks (.claude/), MCP servers
+  (.mcp.json). An agent's context comes only from the definitions repo."
+  ["CLAUDE.md" "CLAUDE.local.md" ".claude/" ".mcp.json"])
+
 (defn clone-at!
   "Clones repo into dest and checks out sha on a local branch named branch.
-  The clone has no remote, so an agent cannot push from it."
+  The clone has no remote, so an agent cannot push from it. excluded-paths are
+  left out with a sparse checkout; they stay in the commit, and git add -A in
+  the clone neither deletes them nor adds new ones."
   [repo dest sha branch]
   (proc/sh! ["git" "clone" "--quiet" "--no-checkout" (str "file://" repo) (str dest)])
+  (apply git! dest "sparse-checkout" "set" "--no-cone" "/*" (map #(str "!" %) excluded-paths))
   (git! dest "checkout" "--quiet" "-B" branch sha)
   (git! dest "remote" "remove" "origin")
   (git! dest "config" "user.name" "gauntlet worker")

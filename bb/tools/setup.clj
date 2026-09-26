@@ -44,14 +44,35 @@
           image   (or (:image current) conf/default-image)]
       (edit-config! #(r/assoc % :runtime (array-map :type          :docker
                                                     :image         image
+                                                    :auth          (or (:auth current) :api-key)
                                                     :user          (conf/uid-gid)
-                                                    :env           ["ANTHROPIC_API_KEY"]
+                                                    :env           (or (:env current) [])
                                                     :host-path-map (or (:host-path-map current) {}))))
-      (println (str "Runtime set to docker (image " image ", user " (conf/uid-gid) ")."))
+      (println (str "Runtime set to docker (image " image ", user " (conf/uid-gid)
+                    ", auth " (name (or (:auth current) :api-key)) ")."))
+      (println "To use your Claude plan instead of an API key: bb auth subscription")
       (println "Run bb doctor to check what the Docker runtime still needs."))
 
     :else
     (println "Usage: bb runtime fake|docker")))
+
+(defn set-auth
+  "Sets how the Docker runtime authenticates Claude Code."
+  [[kind]]
+  (let [runtime (:runtime (:config (conf/read-config)))]
+    (cond
+      (not= :docker (:type runtime))
+      (println "Switch to the Docker runtime first: bb runtime docker")
+
+      (#{"subscription" "api-key"} kind)
+      (do (edit-config! #(r/assoc-in % [:runtime :auth] (keyword kind)))
+          (println (if (= "subscription" kind)
+                     "Auth set to subscription: runs use your Claude plan via CLAUDE_CODE_OAUTH_TOKEN."
+                     "Auth set to api-key: runs are billed per token via ANTHROPIC_API_KEY."))
+          (println "Run bb doctor to check the token is available."))
+
+      :else
+      (println "Usage: bb auth subscription|api-key"))))
 
 (defn build-image []
   (let [image (or (get-in (conf/read-config) [:config :runtime :image]) conf/default-image)]

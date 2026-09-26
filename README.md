@@ -29,6 +29,7 @@ Other tasks:
 
 ```
 bb runtime fake|docker    # switch runtimes; docker also sets :user to your uid:gid
+bb auth subscription|api-key   # Docker runtime: use your Claude plan or an API key
 bb build-image            # build the agent image from docker/agent
 bb tasks                  # list tasks
 ```
@@ -86,9 +87,11 @@ A reviewer's verdict must be `reject` exactly when it has at least one
 - Only the orchestrator writes to SQLite and to the project repo.
 - Agent definitions are read from the git object store at the configured
   ref, so neither agents nor uncommitted edits can change them.
-- The Docker runtime starts Claude Code with `--bare`, which stops it from
-  loading `CLAUDE.md` files or hooks from the checkout. Code under review
-  therefore cannot add to a reviewer's instructions through those files.
+- Checkouts leave out `CLAUDE.md` and `CLAUDE.local.md` at any depth,
+  `.claude/` and `.mcp.json` (a sparse checkout; the files stay in the
+  commits). Code under review therefore cannot add instructions, hooks or MCP
+  servers to an agent's context. With API key auth, Claude Code also runs with
+  `--bare`.
 
 Containers have network access, which the agent needs to reach the API. They
 can reach anything else on the network too.
@@ -116,8 +119,19 @@ test):
 docker build -t gauntlet-agent docker/agent
 ```
 
-Then set `:runtime` in `gauntlet.edn` as shown in the example config, and
-export `ANTHROPIC_API_KEY`.
+Then set `:runtime` in `gauntlet.edn` (`bb runtime docker`) and choose how
+Claude Code authenticates (`bb auth ...`):
+
+- `:auth :subscription` uses a Claude plan. Create a token with
+  `claude setup-token` (or `docker run -it --rm gauntlet-agent claude setup-token`)
+  and export it as `CLAUDE_CODE_OAUTH_TOKEN`. Runs count against the plan's
+  usage limits. When a run hits a limit the pipeline stops and leaves the item
+  where it was; `run-next` after the limit resets continues from there. Dollar
+  figures are API-equivalent estimates.
+- `:auth :api-key` (the default) uses `ANTHROPIC_API_KEY` and is billed per
+  token. Claude Code runs with `--bare`, which accepts only an API key.
+
+The variable for the chosen auth is passed into the container by name.
 
 - `:user` should match the owner of `data/`, so that the container can write
   to the run directories and the orchestrator can fetch from them.

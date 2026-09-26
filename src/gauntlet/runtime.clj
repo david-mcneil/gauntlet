@@ -12,7 +12,8 @@
       :system-file     file holding the assembled agent context
       :dirs            {:work :task :inputs :out} host directories
       :log-file        file to write the runtime's raw output to
-    Returns {:exit int :cost-usd number :input-tokens int :output-tokens int}.
+    Returns {:exit int :cost-usd number :input-tokens int :output-tokens int},
+    plus :limited true when a usage or rate limit stopped the run.
     The agent's actual output is whatever it wrote to (:out dirs).")
   (run-command [rt request]
     "Runs a shell command against a checkout to produce a reviewer input

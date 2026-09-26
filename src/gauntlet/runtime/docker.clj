@@ -2,9 +2,17 @@
   "Runs each agent in a fresh container using Claude Code in headless mode.
 
   The container sees only the directories for its own run. Reviewers get the
-  checkout read-only. --bare stops Claude Code from loading CLAUDE.md files or
-  hooks from the checkout, so code under review cannot add instructions to a
-  reviewer's context."
+  checkout read-only. Checkouts leave out CLAUDE.md, .claude/ and .mcp.json
+  (see gauntlet.git/excluded-paths), so code under review cannot add
+  instructions, hooks or MCP servers to an agent's context.
+
+  :auth selects how Claude Code authenticates:
+    :api-key       ANTHROPIC_API_KEY, billed per token. Adds --bare, which
+                   also skips CLAUDE.md discovery and hooks. --bare does not
+                   read OAuth tokens, so it cannot be used with a subscription.
+    :subscription  CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`, which
+                   draws on a Claude plan's usage limits. Project settings are
+                   not loaded (--setting-sources user)."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
             [gauntlet.proc :as proc]
@@ -25,10 +33,18 @@
 (defn- mount [path-map from to mode]
   ["-v" (str (host-path path-map from) ":" to ":" mode)])
 
-(defn- base-args [{:keys [user env]}]
+(defn auth-var [{:keys [auth]}]
+  (if (= :subscription auth) "CLAUDE_CODE_OAUTH_TOKEN" "ANTHROPIC_API_KEY"))
+
+(defn- base-args [{:keys [user env] :as config}]
   (concat ["docker" "run" "--rm" "--init"]
           (when user ["--user" user "-e" "HOME=/tmp"])
-          (mapcat (fn [var] ["-e" var]) env)))
+          (mapcat (fn [var] ["-e" var]) (distinct (cons (auth-var config) env)))))
+
+(defn- auth-args [{:keys [auth]}]
+  (if (= :subscription auth)
+    ["--setting-sources" "user"]
+    ["--bare"]))
 
 (defn agent-command
   "The docker command line for an agent run."
@@ -43,9 +59,9 @@
     (mount host-path-map (:out dirs) "/out" "rw")
     (mount host-path-map system-file "/agent/system.md" "ro")
     ["-w" "/work" image
-     "claude" "--print" prompt
-     "--bare"
-     "--model" model
+     "claude" "--print" prompt]
+    (auth-args config)
+    ["--model" model
      "--max-budget-usd" (str max-budget-usd)
      "--append-system-prompt-file" "/agent/system.md"
      "--permission-mode" "bypassPermissions"
@@ -58,6 +74,14 @@
   (vec (concat (base-args config)
                (mount host-path-map work "/work" "rw")
                ["-w" "/work" image "sh" "-c" cmd])))
+
+(def ^:private limit-pattern
+  #"(?i)hit your .{0,40}limit|usage limit|rate[ _-]?limit|credit balance too low")
+
+(defn usage-limited?
+  "True if Claude Code's output says a usage, rate or credit limit stopped it."
+  [out]
+  (boolean (re-find limit-pattern (str out))))
 
 (defn parse-result
   "Extracts cost and token counts from Claude Code's --output-format json
@@ -76,7 +100,8 @@
   (run-agent [_ request]
     (let [{:keys [exit out err]} (proc/sh (agent-command config request))]
       (spit (:log-file request) (str out "\n--- stderr ---\n" err))
-      (assoc (parse-result out) :exit exit)))
+      (cond-> (assoc (parse-result out) :exit exit)
+        (and (not (zero? exit)) (usage-limited? (str out err))) (assoc :limited true))))
   (run-command [_ request]
     (let [{:keys [exit out err]} (proc/sh (command-command config request))]
       {:exit exit :out (str out err)})))

@@ -20,6 +20,7 @@
               [:docker [:map
                         [:type [:= :docker]]
                         [:image :string]
+                        [:auth {:optional true} [:enum :api-key :subscription]]
                         [:user {:optional true} :string]
                         [:env {:optional true} [:vector :string]]
                         [:host-path-map {:optional true} [:map-of :string :string]]]]]]])

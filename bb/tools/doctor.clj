@@ -19,7 +19,9 @@
 (def ^:private labels {:ok "ok  " :fail "FAIL" :warn "warn" :info "    "})
 
 (defn- print-check [{:keys [status msg fix]}]
-  (println (str "  " (labels status) "  " msg))
+  (let [[first-line & more] (str/split-lines msg)]
+    (println (str "  " (labels status) "  " first-line))
+    (doseq [line more] (println (str "        " line))))
   (when (and fix (not= :fail status))
     (doseq [line (str/split-lines fix)]
       (println (str "          " line)))))
@@ -155,8 +157,21 @@
                                  "They are not used until committed.")))
            :state {:summary s}})))))
 
+(defn- auth-fix [image auth-var subscription?]
+  (if subscription?
+    (str "Create a token for your Claude plan (it opens a login link):\n"
+         "  docker run -it --rm " image " claude setup-token\n"
+         "or, if Claude Code is installed here: claude setup-token\n"
+         "Then export it in the shell you run the orchestrator from:\n"
+         "  export " auth-var "=...")
+    (str "Create an API key at console.anthropic.com, then export it in the\n"
+         "shell you run the orchestrator from:\n"
+         "  export " auth-var "=...\n"
+         "Or use your Claude plan instead: bb auth subscription")))
+
 (defn- docker-section [{:keys [config]}]
-  (let [{:keys [image user env host-path-map]} (:runtime config)
+  (let [{:keys [image user auth host-path-map]} (:runtime config)
+        subscription? (= :subscription auth)
         me (conf/uid-gid)]
     (cond
       (not (fs/which "docker"))
@@ -174,7 +189,7 @@
 
       :else
       (let [version (sh "docker" "run" "--rm" image "claude" "--version")
-            key-var "ANTHROPIC_API_KEY"]
+            key-var (if subscription? "CLAUDE_CODE_OAUTH_TOKEN" "ANTHROPIC_API_KEY")]
         {:checks
          (cond-> [(pass "Docker daemon reachable")
                   (pass (str "image " image))]
@@ -185,14 +200,14 @@
            (conj (fail (str "claude does not run in " image ": " (:err version))
                        "Rebuild the image:\n  bb build-image"))
 
-           (not (some #{key-var} env))
-           (conj (fail (str ":runtime :env does not pass " key-var)
-                       (str "Add \"" key-var "\" to :env, or run: bb runtime docker")))
+           true
+           (conj (info (if subscription?
+                         "auth: subscription (runs count against your Claude plan's usage limits)"
+                         "auth: api-key (runs are billed per token)")))
 
-           (and (some #{key-var} env) (str/blank? (System/getenv key-var)))
+           (str/blank? (System/getenv key-var))
            (conj (fail (str key-var " is not set in this shell")
-                       (str "Export it in the shell you run the orchestrator from:\n"
-                            "  export " key-var "=...")))
+                       (auth-fix image key-var subscription?)))
 
            (nil? user)
            (conj (fail ":runtime has no :user"
@@ -265,7 +280,7 @@
                (= :fake runtime)
                (conj (info "The fake runtime does not run these commands; the Docker runtime does.")))}))
 
-(defn- budget-section [{:keys [summary config runtime]}]
+(defn- budget-checks [summary config runtime]
   (let [agents (get-in summary [:defs :agents])
         worker (first (filter #(= :implement (:role %)) agents))
         round  (reduce + (map :max-budget-usd agents))
@@ -283,6 +298,15 @@
        (and (<= (:max-budget-usd worker) daily) (< daily round))
        (conj (warn "the daily budget is less than one full round"
                    "The pipeline stops partway through reviews and resumes the next day.")))}))
+
+(defn- budget-section [{:keys [summary config runtime]}]
+  (let [subscription? (= :subscription (get-in config [:runtime :auth]))]
+    (update (budget-checks summary config runtime) :checks
+            #(cond-> (vec %)
+               (and subscription? (= :docker runtime))
+               (conj (info (str "With a subscription the dollar figures are API-equivalent estimates.\n"
+                                "The daily budget still limits how much work starts each day; your\n"
+                                "plan's usage limits pause the pipeline, and run-next resumes it.")))))))
 
 (defn- queue-next-step [{:keys [summary runtime]}]
   (let [items   (:items summary)

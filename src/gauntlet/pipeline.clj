@@ -6,8 +6,8 @@
                    +-- rejected --+   (up to :max-rounds times)
 
   Any failure, a blocked worker, or running out of rounds sends the item to
-  needs_human. Items stay in implementing or reviewing if the daily budget
-  stops the pipeline, and resume from there on the next run."
+  needs_human. Items stay in implementing or reviewing if the daily budget or
+  a usage limit stops the pipeline, and resume from there on the next run."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -143,8 +143,15 @@
                   (fn [dirs]
                     (git/clone-at! repo (:work dirs) start-sha "work")
                     (write-task! (:task dirs) item feedback)))]
-    (if-not (zero? (:exit result))
+    (cond
+      (:limited result)
+      (do (fail-run! ds run-id "usage limit")
+          {:item-id (:id item) :status (:status item) :stopped :usage-limit})
+
+      (not (zero? (:exit result)))
       (to-needs-human ctx item (fail-run! ds run-id (str "worker exited " (:exit result))))
+
+      :else
       (let [{:keys [value error]} (read-output (io/file (:out dirs) "result.json") WorkerResult)]
         (cond
           error
@@ -199,8 +206,15 @@
                         (git/clone-at! (:repo config) (:work dirs) head "review")
                         (write-task! (:task dirs) item nil)
                         (produce-inputs! ctx item agent (:inputs dirs))))]
-        (if-not (zero? (:exit result))
+        (cond
+          (:limited result)
+          (do (fail-run! ds run-id "usage limit")
+              {:stopped :usage-limit})
+
+          (not (zero? (:exit result)))
           {:error (fail-run! ds run-id (str (name (:id agent)) " exited " (:exit result)))}
+
+          :else
           (let [{:keys [value error]} (read-output (io/file (:out dirs) "verdict.json") Verdict)
                 blocking? (some #(= "blocking" (:severity %)) (:findings value))]
             (cond
@@ -264,6 +278,7 @@
         (let [outcome (review! ctx item agent)]
           (cond
             (= :approve outcome) (recur more)
+            (:stopped outcome)   {:item-id (:id item) :status "reviewing" :stopped (:stopped outcome)}
             (:error outcome)     (to-needs-human ctx item (:error outcome))
             (>= (:round item) (:max-rounds config))
             (to-needs-human ctx item (str "rejected by " (name (:id agent))

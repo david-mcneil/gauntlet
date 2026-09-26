@@ -45,6 +45,25 @@
     (is (contains? (mounts (docker/agent-command config (request :implement)))
                    "/home/me/projects/data/runs/7/work:/work:rw"))))
 
+(deftest auth-test
+  (testing "API key auth uses --bare and passes ANTHROPIC_API_KEY"
+    (let [cmd (docker/agent-command (dissoc config :env) (request :review))]
+      (is (some #{"--bare"} cmd))
+      (is (some #{"ANTHROPIC_API_KEY"} cmd))))
+  (testing "subscription auth passes the OAuth token and does not use --bare"
+    (let [cmd (docker/agent-command (assoc config :auth :subscription :env []) (request :review))]
+      (is (not (some #{"--bare"} cmd)))
+      (is (some #{"CLAUDE_CODE_OAUTH_TOKEN"} cmd))
+      (is (not (some #{"ANTHROPIC_API_KEY"} cmd)))
+      (is (= ["--setting-sources" "user"]
+             (take 2 (drop-while #(not= "--setting-sources" %) cmd)))))))
+
+(deftest usage-limited-test
+  (is (docker/usage-limited? "Claude AI usage limit reached|1760000000"))
+  (is (docker/usage-limited? "You've hit your limit · resets 3pm"))
+  (is (docker/usage-limited? "API Error: 429 {\"type\":\"rate_limit_error\"}"))
+  (is (not (docker/usage-limited? "Error: tool failed"))))
+
 (deftest parse-result-test
   (is (= {:cost-usd 0.0123 :input-tokens 100 :output-tokens 20}
          (docker/parse-result "{\"total_cost_usd\":0.0123,\"usage\":{\"input_tokens\":100,\"output_tokens\":20}}")))

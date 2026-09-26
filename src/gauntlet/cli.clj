@@ -8,10 +8,9 @@
             [gauntlet.defs :as defs]
             [gauntlet.pipeline :as pipeline]
             [gauntlet.runtime.docker :as docker]
+            [gauntlet.progress :as progress]
             [gauntlet.runtime.fake :as fake]
-            [gauntlet.watch :as watch])
-  (:import (java.time LocalTime)
-           (java.time.format DateTimeFormatter)))
+            [gauntlet.watch :as watch]))
 
 (def usage
   "Usage: clojure -M:run <command>
@@ -39,10 +38,11 @@
     :docker (docker/docker-runtime runtime)))
 
 (defn- ctx [{:keys [config ds]}]
-  (pipeline/context config ds (make-runtime config)))
+  (assoc (pipeline/context config ds (make-runtime config))
+         :on-event progress/print-event))
 
 (defn- print-result [result]
-  (println (str "item " (:item-id result) ": " (:status result)
+  (println (str (progress/stamp) " item " (:item-id result) ": " (:status result)
                 (case (:stopped result)
                   :budget      " (stopped: daily budget reached)"
                   :usage-limit " (stopped: usage limit reached; run again after it resets)"
@@ -72,16 +72,14 @@
         (print-result result)
         (when-not (:stopped result) (recur))))))
 
-(defn- stamp [] (.format (LocalTime/now) (DateTimeFormatter/ofPattern "HH:mm:ss")))
-
-(defmethod command "watch" [_ {:keys [config ds]} & [poll-seconds]]
+(defmethod command "watch" [_ env & [poll-seconds]]
   (let [poll-ms (* 1000 (or (some-> poll-seconds parse-long) 30))]
-    (println (str (stamp) " watching the queue"))
-    (when-let [message (watch/watch #(pipeline/context config ds (make-runtime config))
-                                    {:poll-ms       poll-ms
-                                     :limit-wait-ms (* 15 60 1000)
-                                     :report        #(do (print (str (stamp) " ")) (print-result %))
-                                     :log           #(println (str (stamp) " " %))})]
+    (println (str (progress/stamp) " watching the queue"))
+    (when (watch/watch #(ctx env)
+                       {:poll-ms       poll-ms
+                        :limit-wait-ms (* 15 60 1000)
+                        :report        print-result
+                        :log           #(println (str (progress/stamp) " " %))})
       (System/exit 1))))
 
 (defmethod command "list" [_ {:keys [ds]}]

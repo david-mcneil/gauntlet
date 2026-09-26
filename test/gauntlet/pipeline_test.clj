@@ -234,3 +234,25 @@
     (is (= {:status "implementing" :stopped :auth}
            (select-keys (pipeline/run-next ctx) [:status :stopped])))
     (is (= "implementing" (:status (db/item (:ds ctx) id))))))
+
+(deftest progress-events-test
+  (let [events (atom [])
+        ctx    (assoc (ts/test-context {:alpha (reject-first-time)})
+                      :on-event #(swap! events conj %))
+        _      (add-item! ctx)
+        _      (pipeline/run-next ctx)
+        types  (map (juxt :type #(some-> (:agent %) name)) @events)]
+    (is (= [[:item-picked nil] [:round-started nil]
+            [:agent-started "worker"] [:agent-finished "worker"] [:worker-done nil]
+            [:agent-started "alpha"] [:agent-finished "alpha"] [:verdict "alpha"]
+            [:round-started nil]
+            [:agent-started "worker"] [:agent-finished "worker"] [:worker-done nil]
+            [:agent-started "alpha"] [:agent-finished "alpha"] [:verdict "alpha"]
+            [:input-started nil] [:input-finished nil]
+            [:agent-started "beta"] [:agent-finished "beta"] [:verdict "beta"]]
+           types))
+    (testing "the rejection event names the reviewer and carries its findings"
+      (let [v (first (filter #(= :verdict (:type %)) @events))]
+        (is (= "reject" (:verdict v)))
+        (is (= 2 (count (:findings v)))))
+      (is (= :alpha (:rejected-by (second (filter #(= :round-started (:type %)) @events))))))))

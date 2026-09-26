@@ -90,6 +90,26 @@ clojure -M:run run-all      # keep going until the queue is empty or something s
 clojure -M:run watch        # keep going, and wait for new items when the queue is empty
 ```
 
+All three print progress as it happens: the item being picked up, each round,
+each agent as it starts and finishes (with time and estimated cost), the
+worker's summary and commit, reviewer input commands, and every verdict with
+its findings:
+
+```
+23:33:45 item 4 "Basic arithmetic": starting
+23:33:45   round 1
+23:33:45   worker (claude-sonnet-5) implementing from 239f235 ...
+23:36:02   worker finished in 2m17s, ~$0.38
+23:36:02   worker committed fc2754b: Added subtract, multiply and divide with tests.
+23:36:02   comments (claude-haiku-4-5-20251001) reviewing fc2754b ...
+23:36:20   comments finished in 18s, ~$0.02
+23:36:20   comments: REJECT - divide has no docstring.
+23:36:20       [blocking] C1 src/calc/core.clj:14 Public function divide has no docstring.
+23:36:20   round 2: rejected by comments, back to the worker
+...
+23:41:07 item 4: merged at 9ac31e2d0b41
+```
+
 `watch` runs until you stop it with Ctrl-C. You can add items from another
 terminal while it runs. It checks an empty queue every 30 seconds
 (`watch 10` checks every 10). When the daily budget is reached it sleeps until

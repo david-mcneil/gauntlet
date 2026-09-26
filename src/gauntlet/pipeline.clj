@@ -61,6 +61,13 @@
       (catch Exception e
         {:error (str "unreadable " (.getName (io/file file)) ": " (.getMessage e))}))))
 
+(defn- emit
+  "Reports a progress event to the context's :on-event function, if any.
+  Events are maps with a :type; see the call sites for the keys of each."
+  [ctx event]
+  (when-let [f (:on-event ctx)]
+    (f event)))
+
 (defn- to-needs-human [{:keys [ds]} item note]
   (db/update-item! ds (:id item) {:status "needs_human" :note note})
   {:item-id (:id item) :status "needs_human" :note note})
@@ -111,7 +118,10 @@
         system-file (io/file root "system.md")]
     (spit system-file (:context agent))
     (prepare! dirs)
-    (let [result (runtime/run-agent rt {:agent          (:id agent)
+    (emit ctx {:type :agent-started :item-id (:id item) :round (:round item) :run-id run-id
+               :agent (:id agent) :role (:role agent) :model (:model agent) :commit input-sha})
+    (let [started (System/currentTimeMillis)
+          result (runtime/run-agent rt {:agent          (:id agent)
                                         :role           (:role agent)
                                         :model          (:model agent)
                                         :max-budget-usd (:max-budget-usd agent)
@@ -124,6 +134,9 @@
                                  :output_tokens (:output-tokens result)
                                  :run_dir       (str root)
                                  :status        "running"})
+      (emit ctx {:type :agent-finished :item-id (:id item) :run-id run-id :agent (:id agent)
+                 :exit (:exit result) :stopped (:stopped result) :cost-usd (:cost-usd result)
+                 :ms (- (System/currentTimeMillis) started)})
       [run-id dirs result])))
 
 (defn- fail-run! [ds run-id error]
@@ -173,6 +186,8 @@
 
               :else
               (do (db/finish-run! ds run-id {:status "ok" :output_sha head})
+                  (emit ctx {:type :worker-done :item-id (:id item) :commit head
+                             :summary (:summary value)})
                   (db/update-item! ds (:id item) {:status "reviewing" :head_sha head :note nil})
                   (db/item ds (:id item))))))))))
 
@@ -181,15 +196,19 @@
 (defn- produce-inputs!
   "Writes each input the reviewer needs into inputs-dir. Inputs are computed
   once per commit and reused by later reviewers."
-  [{:keys [rt config]} item agent inputs-dir]
+  [{:keys [rt config] :as ctx} item agent inputs-dir]
   (doseq [input (:inputs agent)]
     (let [cache (io/file (:data-dir config) "inputs" (:head-sha item) (name input))]
       (when-not (.exists cache)
         (let [cmd  (or (get-in config [:inputs input :cmd])
                        (throw (ex-info (str "no command configured for input " input) {})))
               work (io/file (:data-dir config) "inputs" (:head-sha item) (str (name input) "-work"))]
+          (emit ctx {:type :input-started :item-id (:id item) :input input :cmd cmd})
           (git/clone-at! (:repo config) work (:head-sha item) "review")
-          (let [{:keys [exit out]} (runtime/run-command rt {:input input :cmd cmd :work work})]
+          (let [started (System/currentTimeMillis)
+                {:keys [exit out]} (runtime/run-command rt {:input input :cmd cmd :work work})]
+            (emit ctx {:type :input-finished :item-id (:id item) :input input :exit exit
+                       :ms (- (System/currentTimeMillis) started)})
             (spit cache (str "exit " exit "\n\n" out)))))
       (io/copy cache (io/file inputs-dir (name input))))))
 
@@ -200,7 +219,8 @@
   (let [head (:head-sha item)]
     (if (db/prior-approval ds {:commit-sha head :agent (name (:id agent))
                                :agent-version (:version agent) :model (:model agent)})
-      :approve
+      (do (emit ctx {:type :approval-reused :item-id (:id item) :agent (:id agent) :commit head})
+          :approve)
       (let [[run-id dirs result]
             (execute! ctx item agent head reviewer-prompt
                       (fn [dirs]
@@ -231,6 +251,9 @@
                   (db/add-verdict! ds {:run-id run-id :item-id (:id item) :commit-sha head
                                        :agent (name (:id agent)) :verdict (:verdict value)
                                        :summary (:summary value) :findings (:findings value)})
+                  (emit ctx {:type :verdict :item-id (:id item) :agent (:id agent) :commit head
+                             :verdict (:verdict value) :summary (:summary value)
+                             :findings (:findings value)})
                   (keyword (:verdict value))))))))))
 
 ;; Merge
@@ -246,11 +269,12 @@
 
 ;; Driver
 
-(defn- start! [{:keys [ds config]} item]
+(defn- start! [{:keys [ds config] :as ctx} item]
   (let [base (or (git/rev-parse (:repo config) (:main-branch config))
                  (throw (ex-info (str "branch not found: " (:main-branch config)) {})))]
     (db/update-item! ds (:id item) {:status "implementing" :branch (branch-name item)
                                     :base_sha base :round 1})
+    (emit ctx {:type :round-started :item-id (:id item) :round 1})
     (db/item ds (:id item))))
 
 (defn- advance
@@ -286,6 +310,8 @@
                                           " after " (:round item) " rounds"))
             :else
             (do (db/update-item! ds (:id item) {:status "implementing" :round (inc (:round item))})
+                (emit ctx {:type :round-started :item-id (:id item) :round (inc (:round item))
+                           :rejected-by (:id agent)})
                 (db/item ds (:id item)))))))))
 
 (defn process-item
@@ -302,6 +328,8 @@
   queue is empty."
   [{:keys [ds] :as ctx}]
   (when-let [item (db/next-item ds)]
+    (emit ctx {:type :item-picked :item-id (:id item) :title (:title item)
+               :status (:status item) :round (:round item)})
     (try
       (process-item ctx item)
       (catch Exception e

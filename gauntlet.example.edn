@@ -1,0 +1,22 @@
+;; Copy to gauntlet.edn. Relative paths are resolved against this file's directory.
+{:repo             "../project"        ; git repo the pipeline works in; see README on bare vs checked-out main
+ :main-branch      "main"
+ :defs             {:repo "../agent-defs" :ref "main"}
+ :data-dir         "data"              ; SQLite database, run directories, logs
+ :max-rounds       3                   ; worker attempts before an item goes to needs_human
+ :daily-budget-usd 20.0
+
+ ;; Reviewer inputs, produced in a separate checkout of the commit under review.
+ :inputs {:test-results    {:cmd "clojure -M:test"}
+          :coverage-report {:cmd "clojure -M:coverage"}}
+
+ ;; :fake runs stand-in agents that commit a dummy change and approve.
+ :runtime {:type :fake}
+
+ ;; :runtime {:type          :docker
+ ;;           :image         "gauntlet-agent"
+ ;;           :user          "1000:1000"          ; should match the owner of data-dir
+ ;;           :env           ["ANTHROPIC_API_KEY"] ; passed through by name
+ ;;           :host-path-map {}}                   ; e.g. {"/workspace" "/home/me/projects"} if the
+ ;;                                               ; orchestrator runs inside a container
+ }

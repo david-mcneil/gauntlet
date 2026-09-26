@@ -16,6 +16,7 @@
  ;; :runtime {:type          :docker
  ;;           :image         "gauntlet-agent"
  ;;           :auth          :api-key             ; or :subscription (CLAUDE_CODE_OAUTH_TOKEN)
+ ;;           :env-file      "~/.config/gauntlet/env" ; credentials file written by bb login
  ;;           :user          "1000:1000"          ; should match the owner of data-dir
  ;;           :env           []                   ; extra variables to pass through by name
  ;;           :host-path-map {}}                   ; e.g. {"/workspace" "/home/me/projects"} if the

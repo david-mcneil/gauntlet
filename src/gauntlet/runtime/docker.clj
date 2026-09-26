@@ -36,10 +36,19 @@
 (defn auth-var [{:keys [auth]}]
   (if (= :subscription auth) "CLAUDE_CODE_OAUTH_TOKEN" "ANTHROPIC_API_KEY"))
 
-(defn- base-args [{:keys [user env] :as config}]
+(defn- base-args [{:keys [user]}]
   (concat ["docker" "run" "--rm" "--init"]
-          (when user ["--user" user "-e" "HOME=/tmp"])
-          (mapcat (fn [var] ["-e" var]) (distinct (cons (auth-var config) env)))))
+          (when user ["--user" user "-e" "HOME=/tmp"])))
+
+(defn- credential-args
+  "Passes the credentials to an agent container: from :env-file if set (read
+  by the docker CLI, so the value never appears on a command line), otherwise
+  the auth variable by name from the orchestrator's environment. Containers
+  that only run reviewer input commands get no credentials."
+  [{:keys [env env-file] :as config}]
+  (concat (when env-file ["--env-file" env-file])
+          (mapcat (fn [var] ["-e" var])
+                  (distinct (cond->> env (not env-file) (cons (auth-var config)))))))
 
 (defn- auth-args [{:keys [auth]}]
   (if (= :subscription auth)
@@ -53,6 +62,7 @@
   (vec
    (concat
     (base-args config)
+    (credential-args config)
     (mount host-path-map (:work dirs) "/work" (if (= :implement role) "rw" "ro"))
     (mount host-path-map (:task dirs) "/task" "ro")
     (mount host-path-map (:inputs dirs) "/inputs" "ro")

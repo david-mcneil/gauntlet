@@ -12,6 +12,19 @@
 
 (def default-image "gauntlet-agent")
 
+(def default-env-file "~/.config/gauntlet/env")
+
+(defn auth-var [runtime]
+  (if (= :subscription (:auth runtime)) "CLAUDE_CODE_OAUTH_TOKEN" "ANTHROPIC_API_KEY"))
+
+(defn env-file-value
+  "The value of var in a docker env file (VAR=value lines), or nil."
+  [path var]
+  (when (and path (fs/exists? path))
+    (some #(when (str/starts-with? % (str var "="))
+             (not-empty (subs % (inc (count var)))))
+          (str/split-lines (slurp path)))))
+
 (defn expand-home [path]
   (if (or (= "~" path) (str/starts-with? path "~/"))
     (str (fs/home) (subs path 1))

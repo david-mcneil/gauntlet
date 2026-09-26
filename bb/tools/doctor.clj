@@ -157,18 +157,6 @@
                                  "They are not used until committed.")))
            :state {:summary s}})))))
 
-(defn- auth-fix [image auth-var subscription?]
-  (if subscription?
-    (str "Create a token for your Claude plan (it opens a login link):\n"
-         "  docker run -it --rm " image " claude setup-token\n"
-         "or, if Claude Code is installed here: claude setup-token\n"
-         "Then export it in the shell you run the orchestrator from:\n"
-         "  export " auth-var "=...")
-    (str "Create an API key at console.anthropic.com, then export it in the\n"
-         "shell you run the orchestrator from:\n"
-         "  export " auth-var "=...\n"
-         "Or use your Claude plan instead: bb auth subscription")))
-
 (defn- docker-section [{:keys [config]}]
   (let [{:keys [image user auth host-path-map]} (:runtime config)
         subscription? (= :subscription auth)
@@ -188,8 +176,12 @@
       {:checks [(fail (str "image " image " not built") "Build it:\n  bb build-image")]}
 
       :else
-      (let [version (sh "docker" "run" "--rm" image "claude" "--version")
-            key-var (if subscription? "CLAUDE_CODE_OAUTH_TOKEN" "ANTHROPIC_API_KEY")]
+      (let [version  (sh "docker" "run" "--rm" image "claude" "--version")
+            key-var  (conf/auth-var (:runtime config))
+            env-file (some-> (get-in config [:runtime :env-file]) conf/resolve-path)
+            in-file? (some? (conf/env-file-value env-file key-var))
+            perms    (when (and env-file (fs/exists? env-file))
+                       (fs/posix->str (fs/posix-file-permissions env-file)))]
         {:checks
          (cond-> [(pass "Docker daemon reachable")
                   (pass (str "image " image))]
@@ -205,9 +197,25 @@
                          "auth: subscription (runs count against your Claude plan's usage limits)"
                          "auth: api-key (runs are billed per token)")))
 
-           (str/blank? (System/getenv key-var))
-           (conj (fail (str key-var " is not set in this shell")
-                       (auth-fix image key-var subscription?)))
+           in-file?
+           (conj (pass (str key-var " stored in " env-file)))
+
+           (and in-file? (not= "rw-------" perms))
+           (conj (warn (str env-file " is readable by other users (" perms ")")
+                       (str "chmod 600 " env-file)))
+
+           (and (not in-file?) env-file)
+           (conj (fail (str key-var " not found in " env-file)
+                       (str "Run: bb login")))
+
+           (and (not env-file) (not (str/blank? (System/getenv key-var))))
+           (conj (pass (str key-var " set in this shell")))
+
+           (and (not env-file) (str/blank? (System/getenv key-var)))
+           (conj (fail (str "no " (if subscription? "subscription token" "API key") " configured")
+                       (str "Run: bb login"
+                            (when-not subscription?
+                              "\n(or bb auth subscription first, to use your Claude plan instead of an API key)"))))
 
            (nil? user)
            (conj (fail ":runtime has no :user"

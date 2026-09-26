@@ -30,6 +30,7 @@ Other tasks:
 ```
 bb runtime fake|docker    # switch runtimes; docker also sets :user to your uid:gid
 bb auth subscription|api-key   # Docker runtime: use your Claude plan or an API key
+bb login                  # get the token or key and store it for the Docker runtime
 bb build-image            # build the agent image from docker/agent
 bb tasks                  # list tasks
 ```
@@ -122,19 +123,31 @@ docker build -t gauntlet-agent docker/agent
 Then set `:runtime` in `gauntlet.edn` (`bb runtime docker`) and choose how
 Claude Code authenticates (`bb auth ...`):
 
-- `:auth :subscription` uses a Claude plan. Create a token with
-  `claude setup-token` (or `docker run -it --rm gauntlet-agent claude setup-token`)
-  and export it as `CLAUDE_CODE_OAUTH_TOKEN`. Runs count against the plan's
-  usage limits. When a run hits a limit the pipeline stops and leaves the item
-  where it was; `run-next` after the limit resets continues from there. Dollar
-  figures are API-equivalent estimates.
-- `:auth :api-key` (the default) uses `ANTHROPIC_API_KEY` and is billed per
-  token. Claude Code runs with `--bare`, which accepts only an API key.
+- `:auth :subscription` uses a Claude plan, through a token from
+  `claude setup-token`. Runs count against the plan's usage limits. When a run
+  hits a limit the pipeline stops and leaves the item where it was; `run-next`
+  after the limit resets continues from there. Dollar figures are
+  API-equivalent estimates.
+- `:auth :api-key` (the default) uses an API key and is billed per token.
+  Claude Code runs with `--bare`, which accepts only an API key.
 
-The variable for the chosen auth is passed into the container by name.
+`bb login` gets the credential and stores it. For a subscription it runs
+`claude setup-token` in a throwaway container (Claude Code does not need to be
+installed on the host), then asks you to paste the token. It writes the
+credential to `~/.config/gauntlet/env` with permissions 600 and sets
+`:env-file` in `gauntlet.edn`. The orchestrator passes that file to
+`docker run --env-file`, so the credential is never exported in a shell or
+shown on a command line. Without `:env-file`, the credential variable is
+passed through from the orchestrator's environment instead.
+
+Only agent containers receive the credential. Containers that run reviewer
+input commands (tests, coverage) do not, since they execute project code.
+
+Other settings:
 
 - `:user` should match the owner of `data/`, so that the container can write
   to the run directories and the orchestrator can fetch from them.
+  `bb runtime docker` sets it to your uid:gid.
 - If the orchestrator itself runs inside a container that talks to the host's
   Docker daemon, set `:host-path-map` so that bind mounts use host paths.
 - Reviewer inputs (`:inputs` in the config, such as test results and coverage)

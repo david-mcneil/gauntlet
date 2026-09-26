@@ -58,6 +58,19 @@
       (is (= ["--setting-sources" "user"]
              (take 2 (drop-while #(not= "--setting-sources" %) cmd)))))))
 
+(deftest credentials-test
+  (testing "with :env-file, docker reads the credentials from the file"
+    (let [cmd (docker/agent-command (assoc config :auth :subscription :env []
+                                           :env-file "/home/me/.config/gauntlet/env")
+                                    (request :review))]
+      (is (= ["--env-file" "/home/me/.config/gauntlet/env"]
+             (take 2 (drop-while #(not= "--env-file" %) cmd))))
+      (is (not (some #{"CLAUDE_CODE_OAUTH_TOKEN"} cmd)))))
+  (testing "reviewer input commands run without credentials"
+    (let [cmd (docker/command-command (assoc config :env-file "/home/me/.config/gauntlet/env")
+                                      {:cmd "clojure -M:test" :work "/workspace/w"})]
+      (is (not (some #{"--env-file" "ANTHROPIC_API_KEY" "CLAUDE_CODE_OAUTH_TOKEN"} cmd))))))
+
 (deftest usage-limited-test
   (is (docker/usage-limited? "Claude AI usage limit reached|1760000000"))
   (is (docker/usage-limited? "You've hit your limit · resets 3pm"))

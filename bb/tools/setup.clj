@@ -4,6 +4,7 @@
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [borkdude.rewrite-edn :as r]
+            [clojure.string :as str]
             [tools.conf :as conf]))
 
 (defn- edit-config! [f]
@@ -78,3 +79,78 @@
   (let [image (or (get-in (conf/read-config) [:config :runtime :image]) conf/default-image)]
     (println "Building" image "from docker/agent ...")
     (p/shell "docker" "build" "-t" image "docker/agent")))
+
+(defn- read-secret
+  "Reads a line from the terminal without echoing it."
+  [prompt]
+  (if-let [console (System/console)]
+    (some-> (.readPassword console "%s" (into-array Object [prompt])) String.)
+    (do (print prompt) (flush) (read-line))))
+
+(defn- ask-yes? [prompt]
+  (print prompt) (flush)
+  (contains? #{"y" "yes"} (str/lower-case (str/trim (or (read-line) "")))))
+
+(defn- save-env-var!
+  "Sets var=value in a docker env file, creating it readable only by the user."
+  [path var value]
+  (fs/create-dirs (fs/parent path))
+  (when-not (fs/exists? path)
+    (fs/create-file path {:posix-file-permissions "rw-------"}))
+  (fs/set-posix-file-permissions path "rw-------")
+  (let [others (remove #(str/starts-with? % (str var "="))
+                       (str/split-lines (slurp path)))]
+    (spit path (str (str/join "\n" (concat (remove str/blank? others) [(str var "=" value)])) "\n"))))
+
+(defn login
+  "Gets a credential for the Docker runtime and stores it in the env file.
+  With :auth :subscription, runs claude setup-token in a throwaway container
+  first. The credential never goes through gauntlet.edn or the shell history."
+  [_]
+  (let [{:keys [config]} (conf/read-config)
+        runtime       (:runtime config)
+        subscription? (= :subscription (:auth runtime))
+        var           (conf/auth-var runtime)
+        image         (or (:image runtime) conf/default-image)
+        env-file      (or (:env-file runtime) conf/default-env-file)
+        env-path      (conf/resolve-path env-file)]
+    (cond
+      (nil? config)
+      (println "No" conf/config-file "yet. Run: bb init <path-to-project-repo>")
+
+      (not= :docker (:type runtime))
+      (println "Logging in is only needed for the Docker runtime. Run: bb runtime docker")
+
+      :else
+      (do
+        (if subscription?
+          (do
+            (when-not (zero? (:exit (conf/sh "docker" "image" "inspect" image)))
+              (build-image))
+            (println "\nStep 1 of 2: sign in with your Claude account.")
+            (println "Open the link below in your browser, approve access, and paste the")
+            (println "code back here if asked. The token it prints at the end is what you need.\n")
+            (p/shell {:continue true} "docker" "run" "-it" "--rm" image "claude" "setup-token")
+            (println "\nStep 2 of 2: copy the token printed above (it starts with sk-ant-)."))
+          (do
+            (println "Auth is api-key: paste an API key from console.anthropic.com.")
+            (println "(To use your Claude plan instead, run: bb auth subscription, then bb login.)")))
+        (let [value (str/trim (or (read-secret (str "Paste it here (input is hidden): ")) ""))]
+          (if (str/blank? value)
+            (println "Nothing entered; no changes made.")
+            (do
+              (when-not (str/starts-with? value "sk-ant-")
+                (println "Note: that does not look like an Anthropic credential (expected sk-ant-...). Saved anyway."))
+              (save-env-var! env-path var value)
+              (edit-config! #(r/assoc-in % [:runtime :env-file] env-file))
+              (println (str "Saved " var " to " env-path " (readable only by you)."))
+              (println (str conf/config-file " now uses it via :env-file; nothing to export."))
+              (when (ask-yes? "Check it with a one-line request? This uses a tiny amount of your plan or credit. [y/N] ")
+                (let [{:keys [exit]} (p/shell {:continue true}
+                                              (concat ["docker" "run" "--rm" "--env-file" env-path image
+                                                       "claude" "--print" "Reply with the single word OK"
+                                                       "--model" "claude-haiku-4-5-20251001"]
+                                                      (when-not subscription? ["--bare"])))]
+                  (println (if (zero? exit)
+                             "The credential works."
+                             "That request failed. Check the output above, then run bb login again.")))))))))))

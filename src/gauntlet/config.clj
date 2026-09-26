@@ -21,6 +21,7 @@
                         [:type [:= :docker]]
                         [:image :string]
                         [:auth {:optional true} [:enum :api-key :subscription]]
+                        [:env-file {:optional true} :string]
                         [:user {:optional true} :string]
                         [:env {:optional true} [:vector :string]]
                         [:host-path-map {:optional true} [:map-of :string :string]]]]]]])
@@ -42,7 +43,9 @@
   (-> config
       (update :repo #(absolute base-dir %))
       (update :data-dir #(absolute base-dir %))
-      (update-in [:defs :repo] #(absolute base-dir %))))
+      (update-in [:defs :repo] #(absolute base-dir %))
+      (cond-> (get-in config [:runtime :env-file])
+        (update-in [:runtime :env-file] #(absolute base-dir %)))))
 
 (defn load-config [path]
   (let [file   (io/file path)

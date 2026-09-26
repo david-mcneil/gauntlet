@@ -5,6 +5,7 @@
   (:require [clojure.java.io :as io]
             [gauntlet.config :as config]
             [gauntlet.db :as db]
+            [gauntlet.lock :as lock]
             [gauntlet.defs :as defs]
             [gauntlet.pipeline :as pipeline]
             [gauntlet.runtime.docker :as docker]
@@ -33,10 +34,26 @@
     {:config cfg
      :ds     (db/open (str (io/file (:data-dir cfg) "gauntlet.db")))}))
 
-(defn- make-runtime [{:keys [runtime]}]
+(defn- make-runtime [{:keys [runtime data-dir]}]
   (case (:type runtime)
     :fake   (fake/fake-runtime)
-    :docker (docker/docker-runtime runtime)))
+    :docker (docker/docker-runtime (assoc runtime :label data-dir))))
+
+(defn- take-over-queue!
+  "Before processing: make sure no other orchestrator is using this queue,
+  then clean up after one that stopped mid-run."
+  [{:keys [config ds]}]
+  (when-not (lock/acquire! (:data-dir config))
+    (println (str "Another run-next, run-all or watch (pid " (lock/holder (:data-dir config))
+                  ") is already processing this queue."))
+    (System/exit 1))
+  (let [runs (db/mark-interrupted-runs! ds)]
+    (when (pos? runs)
+      (println (str (progress/stamp) " marked " runs " run(s) from an earlier stop as interrupted; resuming"))))
+  (when (= :docker (get-in config [:runtime :type]))
+    (let [n (docker/remove-leftovers! (assoc (:runtime config) :label (:data-dir config)))]
+      (when (pos? n)
+        (println (str (progress/stamp) " removed " n " leftover agent container(s)"))))))
 
 (defn- ctx [{:keys [config ds]}]
   (assoc (pipeline/context config ds (make-runtime config))
@@ -61,11 +78,13 @@
     (println "queued item" id)))
 
 (defmethod command "run-next" [_ env]
+  (take-over-queue! env)
   (if-let [result (pipeline/run-next (ctx env))]
     (print-result result)
     (println "queue is empty")))
 
 (defmethod command "run-all" [_ env]
+  (take-over-queue! env)
   (let [c (ctx env)]
     (loop []
       (when-let [result (pipeline/run-next c)]
@@ -73,6 +92,7 @@
         (when-not (:stopped result) (recur))))))
 
 (defmethod command "watch" [_ env & [poll-seconds]]
+  (take-over-queue! env)
   (let [poll-ms (* 1000 (or (some-> poll-seconds parse-long) 30))]
     (println (str (progress/stamp) " watching the queue"))
     (when (watch/watch #(ctx env)

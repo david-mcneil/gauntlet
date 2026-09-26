@@ -17,7 +17,8 @@
             [gauntlet.git :as git]
             [gauntlet.runtime :as runtime]
             [malli.core :as m]
-            [malli.error :as me]))
+            [malli.error :as me])
+  (:import (java.nio.file CopyOption Files StandardCopyOption)))
 
 (def Verdict
   [:map
@@ -67,6 +68,12 @@
   [ctx event]
   (when-let [f (:on-event ctx)]
     (f event)))
+
+(defn- delete-tree! [dir]
+  (let [f (io/file dir)]
+    (when (.exists f)
+      (doseq [child (reverse (file-seq f))]
+        (.delete ^java.io.File child)))))
 
 (defn- to-needs-human [{:keys [ds]} item note]
   (db/update-item! ds (:id item) {:status "needs_human" :note note})
@@ -204,12 +211,20 @@
                        (throw (ex-info (str "no command configured for input " input) {})))
               work (io/file (:data-dir config) "inputs" (:head-sha item) (str (name input) "-work"))]
           (emit ctx {:type :input-started :item-id (:id item) :input input :cmd cmd})
+          ;; A checkout left by an interrupted attempt would make the clone fail.
+          (delete-tree! work)
           (git/clone-at! (:repo config) work (:head-sha item) "review")
           (let [started (System/currentTimeMillis)
                 {:keys [exit out]} (runtime/run-command rt {:input input :cmd cmd :work work})]
             (emit ctx {:type :input-finished :item-id (:id item) :input input :exit exit
                        :ms (- (System/currentTimeMillis) started)})
-            (spit cache (str "exit " exit "\n\n" out)))))
+            ;; Write then rename, so an interrupted write never leaves a
+            ;; partial report that later reviewers would reuse.
+            (let [tmp (io/file (str cache ".tmp"))]
+              (spit tmp (str "exit " exit "\n\n" out))
+              (Files/move (.toPath tmp) (.toPath cache)
+                          (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
+                                                  StandardCopyOption/REPLACE_EXISTING]))))))
       (io/copy cache (io/file inputs-dir (name input))))))
 
 (defn- review!
@@ -259,13 +274,23 @@
 ;; Merge
 
 (defn- merge! [{:keys [ds config] :as ctx} item]
-  (let [repo (:repo config)
-        main (:main-branch config)]
-    (if (not= (:base-sha item) (git/rev-parse repo main))
+  (let [repo     (:repo config)
+        main     (:main-branch config)
+        main-sha (git/rev-parse repo main)
+        merged   (fn []
+                   (db/update-item! ds (:id item) {:status "merged" :merged_sha (:head-sha item) :note nil})
+                   {:item-id (:id item) :status "merged" :sha (:head-sha item)})]
+    (cond
+      ;; Already fast-forwarded by a run that stopped before recording it.
+      (= main-sha (:head-sha item))
+      (merged)
+
+      (not= (:base-sha item) main-sha)
       (to-needs-human ctx item (str main " moved since the work started; rebase is not automated yet"))
+
+      :else
       (do (git/fast-forward! repo main (:base-sha item) (:head-sha item))
-          (db/update-item! ds (:id item) {:status "merged" :merged_sha (:head-sha item) :note nil})
-          {:item-id (:id item) :status "merged" :sha (:head-sha item)}))))
+          (merged)))))
 
 ;; Driver
 

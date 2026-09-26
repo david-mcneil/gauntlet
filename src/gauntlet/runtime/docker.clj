@@ -36,9 +36,23 @@
 (defn auth-var [{:keys [auth]}]
   (if (= :subscription auth) "CLAUDE_CODE_OAUTH_TOKEN" "ANTHROPIC_API_KEY"))
 
-(defn- base-args [{:keys [user]}]
+(defn- base-args [{:keys [user label]}]
   (concat ["docker" "run" "--rm" "--init"]
+          (when label ["--label" (str "gauntlet.data-dir=" label)])
           (when user ["--user" user "-e" "HOME=/tmp"])))
+
+(defn remove-leftovers!
+  "Removes containers from this queue that outlived an earlier orchestrator
+  (possible if it was killed without a chance to stop them). Only safe while
+  this process holds the queue lock. Returns the number removed."
+  [{:keys [label]}]
+  (if-not label
+    0
+    (let [{:keys [out]} (proc/sh ["docker" "ps" "-aq" "--filter" (str "label=gauntlet.data-dir=" label)])
+          ids (remove str/blank? (str/split-lines out))]
+      (when (seq ids)
+        (proc/sh (into ["docker" "rm" "-f"] ids)))
+      (count ids))))
 
 (defn- credential-args
   "Passes the credentials to an agent container: from :env-file if set (read

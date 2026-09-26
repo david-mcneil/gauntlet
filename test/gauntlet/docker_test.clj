@@ -71,6 +71,11 @@
                                       {:cmd "clojure -M:test" :work "/workspace/w"})]
       (is (not (some #{"--env-file" "ANTHROPIC_API_KEY" "CLAUDE_CODE_OAUTH_TOKEN"} cmd))))))
 
+(deftest label-test
+  (let [cmd (docker/agent-command (assoc config :label "/data/q") (request :review))]
+    (is (= ["--label" "gauntlet.data-dir=/data/q"]
+           (take 2 (drop-while #(not= "--label" %) cmd))))))
+
 (deftest usage-limited-test
   (is (docker/usage-limited? "Claude AI usage limit reached|1760000000"))
   (is (docker/usage-limited? "You've hit your limit · resets 3pm"))

@@ -256,3 +256,43 @@
         (is (= "reject" (:verdict v)))
         (is (= 2 (count (:findings v)))))
       (is (= :alpha (:rejected-by (second (filter #(= :round-started (:type %)) @events))))))))
+
+(deftest resume-after-interrupted-merge-test
+  (testing "an item whose merge moved main but was not recorded is marked merged"
+    (let [ctx  (ts/test-context {})
+          repo (get-in ctx [:config :repo])
+          id   (add-item! ctx)]
+      (with-redefs [db/update-item! (let [orig db/update-item!]
+                                      (fn [ds id changes]
+                                        (when (= "merged" (:status changes))
+                                          (throw (ex-info "stopped before recording" {})))
+                                        (orig ds id changes)))]
+        (try (pipeline/process-item ctx (db/item (:ds ctx) id)) (catch Exception _)))
+      (let [item (db/item (:ds ctx) id)]
+        (is (= "reviewing" (:status item)))
+        (is (= (:head-sha item) (git/rev-parse repo "main"))))
+      (is (= "merged" (:status (pipeline/run-next ctx)))))))
+
+(deftest resume-after-interrupted-input-test
+  (testing "a checkout left by an interrupted input command does not break the retry"
+    (let [interrupted? (atom true)
+          ctx (ts/test-context {} {})
+          ctx (assoc ctx :rt (fake/fake-runtime {}
+                                                {:test-results (fn [_]
+                                                                 (if @interrupted?
+                                                                   (throw (ex-info "interrupted" {}))
+                                                                   {:exit 0 :out "ok"}))}))
+          id  (add-item! ctx)]
+      (is (= "needs_human" (:status (pipeline/run-next ctx))))
+      (reset! interrupted? false)
+      (db/update-item! (:ds ctx) id {:status "reviewing" :note nil})
+      (is (= "merged" (:status (pipeline/run-next ctx)))))))
+
+(deftest mark-interrupted-runs-test
+  (let [ctx (ts/test-context {})
+        id  (add-item! ctx)
+        run (db/start-run! (:ds ctx) {:work_item_id id :round 1 :agent "worker" :role "implement"
+                                      :defs_commit "c" :agent_version "v" :model "m" :input_sha "s"})]
+    (is (= 1 (db/mark-interrupted-runs! (:ds ctx))))
+    (is (= "interrupted" (:status (first (filter #(= run (:id %)) (db/runs (:ds ctx) id))))))
+    (is (= 0 (db/mark-interrupted-runs! (:ds ctx))))))

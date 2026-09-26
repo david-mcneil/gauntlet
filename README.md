@@ -126,8 +126,29 @@ just after midnight; after a usage limit it retries every 15 minutes; if the
 credential is rejected it exits, since retrying will not help. Items that end
 in `needs_human` are reported and it moves on to the next one. It reloads the
 agent definitions before each item, so committed changes to agent-defs apply
-without restarting it. Stopping it during a run is safe: the item stays in
-`implementing` or `reviewing` and continues from there next time.
+without restarting it.
+
+### Stopping and restarting
+
+Stopping `run-next`, `run-all` or `watch` at any point (Ctrl-C or `kill`) and
+starting again continues where it left off:
+
+- The running agent's container is stopped along with the orchestrator.
+- The item keeps its status (`implementing` or `reviewing`). A worker that was
+  interrupted starts that round again from the last fetched commit; its
+  unfinished work is discarded. Reviewer approvals already recorded for the
+  commit are reused.
+- On the next start, runs left in `running` are marked `interrupted`, and a
+  merge that moved main but was not recorded is recognised and completed.
+- Reviewer input reports are written atomically, and a checkout left by an
+  interrupted input command is removed before the retry.
+- Only one of `run-next`, `run-all` and `watch` can process a queue at a time
+  (a lock on `data/gauntlet.lock`). A second one exits with a message.
+
+After `kill -9` the orchestrator cannot stop the agent's container, which keeps
+running (and using your plan) until the next start removes it. Agent
+containers carry a `gauntlet.data-dir` label for this. The cost of an
+interrupted run is not recorded.
 
 ### What the agents see
 

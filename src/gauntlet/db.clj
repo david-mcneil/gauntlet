@@ -144,6 +144,16 @@
 (defn finish-run! [ds run-id changes]
   (sql/update! ds :runs (assoc changes :ended_at (timestamp)) {:id run-id}))
 
+(defn mark-interrupted-runs!
+  "Marks runs left in 'running' by an orchestrator that stopped mid-run.
+  Only safe while no other orchestrator uses this database (see
+  gauntlet.lock). Returns the number of runs marked."
+  [ds]
+  (-> (jdbc/execute-one! ds ["UPDATE runs SET status = 'interrupted', ended_at = ?,
+                                error = 'orchestrator stopped during the run'
+                              WHERE status = 'running'" (timestamp)])
+      :next.jdbc/update-count))
+
 (defn runs [ds item-id]
   (query ds ["SELECT * FROM runs WHERE work_item_id = ? ORDER BY id" item-id]))
 

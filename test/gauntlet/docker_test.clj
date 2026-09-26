@@ -77,6 +77,11 @@
   (is (docker/usage-limited? "API Error: 429 {\"type\":\"rate_limit_error\"}"))
   (is (not (docker/usage-limited? "Error: tool failed"))))
 
+(deftest stop-reason-test
+  (is (= :auth (docker/stop-reason "{\"api_error_status\":401,\"result\":\"Failed to authenticate. API Error: 401 Invalid bearer token\"}")))
+  (is (= :usage-limit (docker/stop-reason "Claude AI usage limit reached")))
+  (is (nil? (docker/stop-reason "Error: tool failed"))))
+
 (deftest parse-result-test
   (is (= {:cost-usd 0.0123 :input-tokens 100 :output-tokens 20}
          (docker/parse-result "{\"total_cost_usd\":0.0123,\"usage\":{\"input_tokens\":100,\"output_tokens\":20}}")))

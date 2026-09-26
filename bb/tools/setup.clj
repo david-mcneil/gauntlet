@@ -88,9 +88,20 @@
     (some-> (.readPassword console "%s" (into-array Object [prompt])) String.)
     (do (print prompt) (flush) (read-line))))
 
-(defn- ask-yes? [prompt]
+(defn- read-pasted-secret
+  "Reads hidden lines until an empty one and joins them without whitespace.
+  A long token copied from a terminal may have been wrapped across lines."
+  []
+  (println "Paste it, then press Enter on an empty line (input is hidden):")
+  (loop [parts []]
+    (let [line (str/trim (or (read-secret "") ""))]
+      (if (str/blank? line)
+        (str/replace (apply str parts) #"\s" "")
+        (recur (conj parts line))))))
+
+(defn- ask-no? [prompt]
   (print prompt) (flush)
-  (contains? #{"y" "yes"} (str/lower-case (str/trim (or (read-line) "")))))
+  (contains? #{"n" "no"} (str/lower-case (str/trim (or (read-line) "")))))
 
 (defn- save-env-var!
   "Sets var=value in a docker env file, creating it readable only by the user."
@@ -136,17 +147,20 @@
           (do
             (println "Auth is api-key: paste an API key from console.anthropic.com.")
             (println "(To use your Claude plan instead, run: bb auth subscription, then bb login.)")))
-        (let [value (str/trim (or (read-secret (str "Paste it here (input is hidden): ")) ""))]
+        (let [value (read-pasted-secret)]
           (if (str/blank? value)
             (println "Nothing entered; no changes made.")
             (do
               (when-not (str/starts-with? value "sk-ant-")
                 (println "Note: that does not look like an Anthropic credential (expected sk-ant-...). Saved anyway."))
+              (when (< (count value) 90)
+                (println (str "Note: that is only " (count value) " characters; a full token is usually over 100."
+                              " Part of it may be missing.")))
               (save-env-var! env-path var value)
               (edit-config! #(r/assoc-in % [:runtime :env-file] env-file))
               (println (str "Saved " var " to " env-path " (readable only by you)."))
               (println (str conf/config-file " now uses it via :env-file; nothing to export."))
-              (when (ask-yes? "Check it with a one-line request? This uses a tiny amount of your plan or credit. [y/N] ")
+              (when-not (ask-no? "Check it with a one-line request? This uses a tiny amount of your plan or credit. [Y/n] ")
                 (let [{:keys [exit]} (p/shell {:continue true}
                                               (concat ["docker" "run" "--rm" "--env-file" env-path image
                                                        "claude" "--print" "Reply with the single word OK"

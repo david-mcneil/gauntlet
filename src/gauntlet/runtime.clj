@@ -13,7 +13,8 @@
       :dirs            {:work :task :inputs :out} host directories
       :log-file        file to write the runtime's raw output to
     Returns {:exit int :cost-usd number :input-tokens int :output-tokens int},
-    plus :limited true when a usage or rate limit stopped the run.
+    plus :stopped :usage-limit or :auth when a limit or a rejected credential
+    stopped the run. Those stop the pipeline without failing the item.
     The agent's actual output is whatever it wrote to (:out dirs).")
   (run-command [rt request]
     "Runs a shell command against a checkout to produce a reviewer input

@@ -6,8 +6,9 @@
                    +-- rejected --+   (up to :max-rounds times)
 
   Any failure, a blocked worker, or running out of rounds sends the item to
-  needs_human. Items stay in implementing or reviewing if the daily budget or
-  a usage limit stops the pipeline, and resume from there on the next run."
+  needs_human. Items stay in implementing or reviewing if the daily budget, a
+  usage limit or a rejected credential stops the pipeline, and resume from
+  there on the next run."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -144,9 +145,9 @@
                     (git/clone-at! repo (:work dirs) start-sha "work")
                     (write-task! (:task dirs) item feedback)))]
     (cond
-      (:limited result)
-      (do (fail-run! ds run-id "usage limit")
-          {:item-id (:id item) :status (:status item) :stopped :usage-limit})
+      (:stopped result)
+      (do (fail-run! ds run-id (name (:stopped result)))
+          {:item-id (:id item) :status (:status item) :stopped (:stopped result)})
 
       (not (zero? (:exit result)))
       (to-needs-human ctx item (fail-run! ds run-id (str "worker exited " (:exit result))))
@@ -207,9 +208,9 @@
                         (write-task! (:task dirs) item nil)
                         (produce-inputs! ctx item agent (:inputs dirs))))]
         (cond
-          (:limited result)
-          (do (fail-run! ds run-id "usage limit")
-              {:stopped :usage-limit})
+          (:stopped result)
+          (do (fail-run! ds run-id (name (:stopped result)))
+              {:stopped (:stopped result)})
 
           (not (zero? (:exit result)))
           {:error (fail-run! ds run-id (str (name (:id agent)) " exited " (:exit result)))}

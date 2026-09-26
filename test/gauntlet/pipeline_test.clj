@@ -215,15 +215,22 @@
   (let [limited? (atom true)
         ctx (ts/test-context {:alpha (fn [req]
                                        (if @limited?
-                                         {:exit 1 :limited true}
+                                         {:exit 1 :stopped :usage-limit}
                                          (fake/approve req)))})
         id  (add-item! ctx)]
     (testing "a usage limit stops the pipeline and leaves the item where it was"
       (is (= {:status "reviewing" :stopped :usage-limit}
              (select-keys (pipeline/run-next ctx) [:status :stopped])))
       (is (= "reviewing" (:status (db/item (:ds ctx) id))))
-      (is (= "usage limit" (:error (last (db/runs (:ds ctx) id))))))
+      (is (= "usage-limit" (:error (last (db/runs (:ds ctx) id))))))
     (testing "the next run resumes with the same reviewer"
       (reset! limited? false)
       (is (= "merged" (:status (pipeline/run-next ctx))))
       (is (= [:worker :alpha :alpha :beta] (ts/agent-calls ctx))))))
+
+(deftest rejected-credential-test
+  (let [ctx (ts/test-context {:worker (fn [_] {:exit 1 :stopped :auth})})
+        id  (add-item! ctx)]
+    (is (= {:status "implementing" :stopped :auth}
+           (select-keys (pipeline/run-next ctx) [:status :stopped])))
+    (is (= "implementing" (:status (db/item (:ds ctx) id))))))

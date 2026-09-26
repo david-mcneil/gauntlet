@@ -93,6 +93,20 @@
   [out]
   (boolean (re-find limit-pattern (str out))))
 
+(def ^:private auth-pattern
+  #"(?i)failed to authenticate|invalid bearer token|invalid api key|\"api_error_status\":\s*401")
+
+(defn auth-failed?
+  "True if Claude Code's output says the credential was rejected."
+  [out]
+  (boolean (re-find auth-pattern (str out))))
+
+(defn stop-reason
+  "Why a failed run should stop the pipeline rather than fail the item, or nil."
+  [out]
+  (cond (auth-failed? out)   :auth
+        (usage-limited? out) :usage-limit))
+
 (defn parse-result
   "Extracts cost and token counts from Claude Code's --output-format json
   result. Returns zeros if the output is not the expected JSON."
@@ -110,8 +124,9 @@
   (run-agent [_ request]
     (let [{:keys [exit out err]} (proc/sh (agent-command config request))]
       (spit (:log-file request) (str out "\n--- stderr ---\n" err))
-      (cond-> (assoc (parse-result out) :exit exit)
-        (and (not (zero? exit)) (usage-limited? (str out err))) (assoc :limited true))))
+      (let [reason (when-not (zero? exit) (stop-reason (str out err)))]
+        (cond-> (assoc (parse-result out) :exit exit)
+          reason (assoc :stopped reason)))))
   (run-command [_ request]
     (let [{:keys [exit out err]} (proc/sh (command-command config request))]
       {:exit exit :out (str out err)})))

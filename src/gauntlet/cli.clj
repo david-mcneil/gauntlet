@@ -42,6 +42,7 @@
                 (case (:stopped result)
                   :budget      " (stopped: daily budget reached)"
                   :usage-limit " (stopped: usage limit reached; run again after it resets)"
+                  :auth        " (stopped: the credential was rejected; run bb login, then run-next)"
                   nil)
                 (when (:note result) (str " - " (:note result)))
                 (when (:sha result) (str " at " (subs (:sha result) 0 12))))))

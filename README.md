@@ -52,6 +52,85 @@ agents that commit a placeholder change and approve. They still merge into
 the project's main branch, so use a throwaway repo or a trial branch
 (`:main-branch`).
 
+## Adding work
+
+A work item is a title and a spec. Queue one with `add`:
+
+```
+clojure -M:run add <title> <spec-file>
+```
+
+The spec comes from a file, or from standard input when the file is `-`:
+
+```
+# from a file
+clojure -M:run add "Division" specs/division.md
+
+# a one-liner
+echo "Add a divide function to calc.core." | clojure -M:run add "Division" -
+
+# several lines
+clojure -M:run add "Division" - <<'EOF'
+Add a divide function to calc.core.
+
+- (divide a b) returns a / b.
+- Dividing by zero throws ex-info with the message "division by zero"
+  and {:a a :b b} as data.
+- Add tests for both cases.
+EOF
+```
+
+`add` prints the new item's number (`queued item 3`). Nothing runs until you
+process the queue:
+
+```
+clojure -M:run run-next     # process one item until it is merged, needs you, or stops
+clojure -M:run run-all      # keep going until the queue is empty or something stops it
+```
+
+### What the agents see
+
+The worker gets the title and spec as `/task/task.md`:
+
+```
+# <title>
+
+<spec>
+```
+
+Reviewers get the same file, so they judge the change against what was asked.
+The spec is the only description of the work that any agent receives; there is
+no conversation with the worker.
+
+### Writing a spec
+
+- Say what should be true when the work is done, not only what to do. The
+  worker and reviewers both check against it.
+- Keep one item to one change. Smaller items are cheaper and easier to review,
+  and a rejection sends back less work.
+- Name files, namespaces or functions when you know them.
+- If the change needs a new dependency, say why in the spec. The example
+  architecture rules in agent-defs (rule A4) reject new dependencies without a
+  justification in the task.
+- If the task cannot be done as written, the worker reports it as blocked and
+  the item goes to `needs_human` with the worker's explanation.
+
+### Order and state
+
+Items run one at a time. `run-next` first continues an item already in
+progress (`implementing` or `reviewing`), then takes the oldest `queued` item.
+Use `list` to see every item and its status, and `show <id>` for its runs,
+verdicts and findings.
+
+An item in `needs_human` stays there until you act. `show <id>` gives the
+reason. Fix the cause (for example, reword the task in a new item, or fix
+something in the project), then either `requeue <id>` to retry it from the step
+it failed in, or leave it and queue a new item. There is no command yet to edit
+or delete a queued item.
+
+`bb bootstrap` is a shortcut that queues a "Project setup" item written from
+the reviewer input commands in `gauntlet.edn`.
+
 ## Pipeline
 
 ```

@@ -10,6 +10,7 @@
             [gauntlet.runtime.docker :as docker]
             [gauntlet.progress :as progress]
             [gauntlet.runtime.fake :as fake]
+            [gauntlet.views :as views]
             [gauntlet.watch :as watch]))
 
 (def usage
@@ -51,7 +52,6 @@
                 (when (:note result) (str " - " (:note result)))
                 (when (:sha result) (str " at " (subs (:sha result) 0 12))))))
 
-(defn- short-sha [s] (if s (subs s 0 (min 12 (count s))) "-"))
 
 (defmulti command (fn [cmd & _] cmd))
 
@@ -83,47 +83,24 @@
       (System/exit 1))))
 
 (defmethod command "list" [_ {:keys [ds]}]
-  (doseq [{:keys [id status round head-sha title note]} (db/items ds)]
-    (println (format "%4d  %-12s round %d  %-12s  %s%s"
-                     id status round (short-sha head-sha) title
-                     (if note (str "  (" note ")") "")))))
+  (run! println (views/list-lines (db/items ds))))
 
 (defmethod command "show" [_ {:keys [ds]} id]
-  (let [id   (parse-long id)
-        item (db/item ds id)]
-    (println (str "#" id " " (:title item)))
-    (println "status:" (:status item) " round:" (:round item) " branch:" (:branch item))
-    (println "base:" (short-sha (:base-sha item)) " head:" (short-sha (:head-sha item))
-             " merged:" (short-sha (:merged-sha item)))
-    (when (:note item) (println "note:" (:note item)))
-    (println "\nruns:")
-    (doseq [r (db/runs ds id)]
-      (println (format "  %4d  round %d  %-14s %-8s %-26s v%s  %s %-15s $%.4f%s"
-                       (:id r) (:round r) (:agent r) (:status r) (:model r)
-                       (short-sha (:agent-version r)) (short-sha (:input-sha r))
-                       (if (:output-sha r) (str "-> " (short-sha (:output-sha r))) "") (double (:cost-usd r))
-                       (if (:error r) (str "  " (:error r)) ""))))
-    (println "\nverdicts:")
-    (doseq [v (db/verdicts ds id)]
-      (println (format "  %-14s %-8s %s  %s" (:agent v) (:verdict v)
-                       (short-sha (:commit-sha v)) (or (:summary v) "")))
-      (doseq [f (db/findings ds (:id v))]
-        (println (str "      [" (:severity f) "] "
-                      (when (:rule f) (str (:rule f) " "))
-                      (when (:file f) (str (:file f) (when (:line f) (str ":" (:line f))) " "))
-                      (:message f)))))))
+  (let [id (parse-long id)]
+    (if-let [item (db/item ds id)]
+      (run! println (views/show-lines item (db/runs ds id)
+                                      (map #(assoc % :findings (db/findings ds (:id %)))
+                                           (db/verdicts ds id))))
+      (println "no item" id))))
 
 (defmethod command "requeue" [_ {:keys [ds]} id]
-  (let [id     (parse-long id)
-        item   (db/item ds id)
-        before (->> (db/events ds id)
-                    (filter #(= "needs_human" (:to-status %)))
-                    last
-                    :from-status)]
+  (let [id   (parse-long id)
+        item (db/item ds id)
+        to   (views/requeue-status (db/events ds id))]
     (if-not (= "needs_human" (:status item))
       (println "item" id "is" (:status item) "- only needs_human items can be requeued")
-      (do (db/update-item! ds id {:status (or before "queued") :round 1 :note nil})
-          (println "item" id "->" (or before "queued"))))))
+      (do (db/update-item! ds id {:status to :round 1 :note nil})
+          (println "item" id "->" to)))))
 
 (defmethod command "agents" [_ {:keys [config]}]
   (let [d (defs/load-defs (get-in config [:defs :repo]) (get-in config [:defs :ref]))]
@@ -131,12 +108,10 @@
     (doseq [a (cons (defs/worker d) (defs/reviewers d))]
       (println (format "  %-14s %-9s %-4s %-26s $%-6s v%s"
                        (name (:id a)) (name (:role a)) (or (:order a) "")
-                       (:model a) (:max-budget-usd a) (short-sha (:version a)))))))
+                       (:model a) (:max-budget-usd a) (views/short-sha (:version a)))))))
 
 (defmethod command "spent" [_ {:keys [ds config]}]
-  (println (format "today: $%.4f of $%.2f"
-                   (double (db/spent-since ds (db/start-of-today)))
-                   (double (:daily-budget-usd config)))))
+  (println (views/spent-line (db/spent-since ds (db/start-of-today)) (:daily-budget-usd config))))
 
 (defmethod command "summary" [_ {:keys [ds config]}]
   ;; Machine-readable state for bb doctor. Printed as EDN.

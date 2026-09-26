@@ -6,7 +6,8 @@
             [borkdude.rewrite-edn :as r]
             [clojure.string :as str]
             [tools.conf :as conf]
-            [tools.project :as project]))
+            [tools.project :as project]
+            [tools.queue :as queue]))
 
 (defn- edit-config! [f]
   (spit conf/config-file (str (f (r/parse-string (slurp conf/config-file))))))
@@ -218,11 +219,8 @@
 
           :else
           (let [spec (project/setup-spec needs)
-                {:keys [exit out err]} (p/shell {:in spec :out :string :err :string :continue true}
-                                                "clojure" "-M:run" "add" project/setup-title "-")]
-            (if (zero? exit)
-              (do (println (str/trim out) "-" project/setup-title)
-                  (println "\nThe worker will be asked to:\n")
-                  (println spec)
-                  (println "\nNext: clojure -M:run run-next"))
-              (println "Could not queue the item:" err))))))))
+                id   (queue/add-item! project/setup-title spec)]
+            (println "queued item" id "-" project/setup-title)
+            (println "\nThe worker will be asked to:\n")
+            (println spec)
+            (println "\nNext: clojure -M:run run-next")))))))

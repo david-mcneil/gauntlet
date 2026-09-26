@@ -39,14 +39,23 @@ bb tasks                  # list tasks
 Working with the queue:
 
 ```
-echo "Describe the change" | clojure -M:run add "Title" -
+echo "Describe the change" | bb add "Title" -
+bb list
+bb show 1                        # runs, verdicts, findings
+bb requeue 1                     # retry a needs_human item
+bb spent                         # today's spend against the daily budget
+
 clojure -M:run run-next          # process the next item
 clojure -M:run watch             # keep processing; wait for new items
-clojure -M:run list
-clojure -M:run show 1            # runs, verdicts, findings
 clojure -M:run agents            # loaded agent definitions and versions
 clojure -M:test                  # tests (fake runtime, no API calls)
 ```
+
+The `bb` queue commands start in a fraction of a second; they read and write
+the SQLite database through the go-sqlite3 babashka pod (downloaded on first
+use). Each has a `clojure -M:run` equivalent with the same output, which takes
+a few seconds to start the JVM. Running items (`run-next`, `run-all`,
+`watch`) stays on the JVM. `bb add` works while `watch` is running.
 
 With `:runtime {:type :fake}` the pipeline runs end to end with stand-in
 agents that commit a placeholder change and approve. They still merge into
@@ -58,20 +67,20 @@ the project's main branch, so use a throwaway repo or a trial branch
 A work item is a title and a spec. Queue one with `add`:
 
 ```
-clojure -M:run add <title> <spec-file>
+bb add <title> <spec-file>
 ```
 
 The spec comes from a file, or from standard input when the file is `-`:
 
 ```
 # from a file
-clojure -M:run add "Division" specs/division.md
+bb add "Division" specs/division.md
 
 # a one-liner
-echo "Add a divide function to calc.core." | clojure -M:run add "Division" -
+echo "Add a divide function to calc.core." | bb add "Division" -
 
 # several lines
-clojure -M:run add "Division" - <<'EOF'
+bb add "Division" - <<'EOF'
 Add a divide function to calc.core.
 
 - (divide a b) returns a / b.

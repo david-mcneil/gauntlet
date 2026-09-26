@@ -316,9 +316,9 @@
     (cond
       stuck
       (str "Item " (:id stuck) " needs you: " (:note stuck) "\n"
-           "  clojure -M:run show " (:id stuck) "\n"
+           "  bb show " (:id stuck) "\n"
            "When it is resolved, send it back through:\n"
-           "  clojure -M:run requeue " (:id stuck))
+           "  bb requeue " (:id stuck))
 
       active
       (str "Process the queue (item " (:id active) " is " (:status active) "):\n"
@@ -335,7 +335,7 @@
 
       :else
       (str "Queue a work item:\n"
-           "  echo \"Describe the change\" | clojure -M:run add \"Title\" -\n"
+           "  echo \"Describe the change\" | bb add \"Title\" -\n"
            "then:\n  clojure -M:run run-next"))))
 
 (defn- queue-section [{:keys [summary] :as state}]

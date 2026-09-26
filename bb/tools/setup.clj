@@ -114,6 +114,38 @@
                        (str/split-lines (slurp path)))]
     (spit path (str (str/join "\n" (concat (remove str/blank? others) [(str var "=" value)])) "\n"))))
 
+(defn- check-credential!
+  "Makes a one-line request with the stored credential and reports the result."
+  [image env-path subscription?]
+  (println "Sending a one-line request with the stored credential ...")
+  (let [{:keys [exit]} (apply p/shell {:continue true}
+                              (concat ["docker" "run" "--rm" "--env-file" env-path image
+                                       "claude" "--print" "Reply with the single word OK"
+                                       "--model" "claude-haiku-4-5-20251001"]
+                                      (when-not subscription? ["--bare"])))]
+    (println (if (zero? exit)
+               "The credential works."
+               "That request failed. Check the output above, then run bb login again."))
+    (zero? exit)))
+
+(defn check-auth
+  "Checks the stored credential with a one-line request."
+  [_]
+  (let [runtime  (:runtime (:config (conf/read-config)))
+        env-file (:env-file runtime)]
+    (cond
+      (not= :docker (:type runtime))
+      (println "The credential is only used by the Docker runtime. Run: bb runtime docker")
+
+      (nil? env-file)
+      (println "No :env-file in" conf/config-file "yet. Run: bb login")
+
+      :else
+      (when-not (check-credential! (or (:image runtime) conf/default-image)
+                                   (conf/resolve-path env-file)
+                                   (= :subscription (:auth runtime)))
+        (System/exit 1)))))
+
 (defn login
   "Gets a credential for the Docker runtime and stores it in the env file.
   With :auth :subscription, runs claude setup-token in a throwaway container
@@ -161,14 +193,7 @@
               (println (str "Saved " var " to " env-path " (readable only by you)."))
               (println (str conf/config-file " now uses it via :env-file; nothing to export."))
               (when-not (ask-no? "Check it with a one-line request? This uses a tiny amount of your plan or credit. [Y/n] ")
-                (let [{:keys [exit]} (p/shell {:continue true}
-                                              (concat ["docker" "run" "--rm" "--env-file" env-path image
-                                                       "claude" "--print" "Reply with the single word OK"
-                                                       "--model" "claude-haiku-4-5-20251001"]
-                                                      (when-not subscription? ["--bare"])))]
-                  (println (if (zero? exit)
-                             "The credential works."
-                             "That request failed. Check the output above, then run bb login again.")))))))))))
+                (check-credential! image env-path subscription?)))))))))
 
 (defn bootstrap
   "Queues a work item that asks the worker to prepare the project for the

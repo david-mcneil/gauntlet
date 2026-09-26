@@ -41,6 +41,7 @@ Working with the queue:
 ```
 echo "Describe the change" | clojure -M:run add "Title" -
 clojure -M:run run-next          # process the next item
+clojure -M:run watch             # keep processing; wait for new items
 clojure -M:run list
 clojure -M:run show 1            # runs, verdicts, findings
 clojure -M:run agents            # loaded agent definitions and versions
@@ -86,7 +87,18 @@ process the queue:
 ```
 clojure -M:run run-next     # process one item until it is merged, needs you, or stops
 clojure -M:run run-all      # keep going until the queue is empty or something stops it
+clojure -M:run watch        # keep going, and wait for new items when the queue is empty
 ```
+
+`watch` runs until you stop it with Ctrl-C. You can add items from another
+terminal while it runs. It checks an empty queue every 30 seconds
+(`watch 10` checks every 10). When the daily budget is reached it sleeps until
+just after midnight; after a usage limit it retries every 15 minutes; if the
+credential is rejected it exits, since retrying will not help. Items that end
+in `needs_human` are reported and it moves on to the next one. It reloads the
+agent definitions before each item, so committed changes to agent-defs apply
+without restarting it. Stopping it during a run is safe: the item stays in
+`implementing` or `reviewing` and continues from there next time.
 
 ### What the agents see
 

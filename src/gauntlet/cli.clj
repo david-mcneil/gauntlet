@@ -8,7 +8,10 @@
             [gauntlet.defs :as defs]
             [gauntlet.pipeline :as pipeline]
             [gauntlet.runtime.docker :as docker]
-            [gauntlet.runtime.fake :as fake]))
+            [gauntlet.runtime.fake :as fake]
+            [gauntlet.watch :as watch])
+  (:import (java.time LocalTime)
+           (java.time.format DateTimeFormatter)))
 
 (def usage
   "Usage: clojure -M:run <command>
@@ -16,6 +19,7 @@
   add <title> <spec-file>   queue a work item; spec-file may be - for stdin
   run-next                  process the next work item
   run-all                   process items until the queue is empty or the budget stops it
+  watch [poll-seconds]      keep processing, waiting for new items when the queue is empty
   list                      list work items
   show <id>                 show an item with its runs, verdicts and findings
   requeue <id>              return a needs_human item to the step it failed in
@@ -67,6 +71,18 @@
       (when-let [result (pipeline/run-next c)]
         (print-result result)
         (when-not (:stopped result) (recur))))))
+
+(defn- stamp [] (.format (LocalTime/now) (DateTimeFormatter/ofPattern "HH:mm:ss")))
+
+(defmethod command "watch" [_ {:keys [config ds]} & [poll-seconds]]
+  (let [poll-ms (* 1000 (or (some-> poll-seconds parse-long) 30))]
+    (println (str (stamp) " watching the queue"))
+    (when-let [message (watch/watch #(pipeline/context config ds (make-runtime config))
+                                    {:poll-ms       poll-ms
+                                     :limit-wait-ms (* 15 60 1000)
+                                     :report        #(do (print (str (stamp) " ")) (print-result %))
+                                     :log           #(println (str (stamp) " " %))})]
+      (System/exit 1))))
 
 (defmethod command "list" [_ {:keys [ds]}]
   (doseq [{:keys [id status round head-sha title note]} (db/items ds)]

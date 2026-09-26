@@ -12,5 +12,7 @@
                :task (setup/set-auth *command-line-args*)}
   login       {:doc  "Get and store the credential agents use (subscription token or API key)"
                :task (setup/login *command-line-args*)}
+  bootstrap   {:doc  "Queue a work item that sets up the project for the reviewer inputs"
+               :task (setup/bootstrap *command-line-args*)}
   build-image {:doc  "Build the Docker image that agents run in"
                :task (setup/build-image)}}}

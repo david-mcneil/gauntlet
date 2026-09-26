@@ -6,7 +6,8 @@
   (:require [babashka.fs :as fs]
             [clojure.edn :as edn]
             [clojure.string :as str]
-            [tools.conf :as conf :refer [sh ok? git]]))
+            [tools.conf :as conf :refer [sh ok? git]]
+            [tools.project :as project]))
 
 ;; Results
 
@@ -118,14 +119,6 @@
          :state {:project-deps (when (map? deps) deps)
                  :project-has-deps? (ok? deps-text)}}))))
 
-(defn- summary
-  "Asks the orchestrator for its view of config, definitions and queue."
-  []
-  (let [{:keys [exit out err]} (sh "clojure" "-M:run" "summary")]
-    (if (and (zero? exit) (str/starts-with? out "{"))
-      (edn/read-string (last (str/split-lines out)))
-      {:config-error (str "clojure -M:run summary failed: " (if (str/blank? err) out err))})))
-
 (defn- defs-section [{:keys [defs-repo config]}]
   (let [ref (get-in config [:defs :ref])]
     (cond
@@ -139,7 +132,7 @@
 
       :else
       (let [dirty? (seq (:out (git defs-repo "status" "--porcelain")))
-            s      (summary)]
+            s      (project/summary)]
         (cond
           (:config-error s)
           {:checks [(fail (str "the orchestrator could not load the config: " (:config-error s))
@@ -251,42 +244,40 @@
   {"test"     ":test {:extra-paths [\"test\"]\n       :extra-deps {io.github.cognitect-labs/test-runner {:git/tag \"v0.5.1\" :git/sha \"dfb30dd\"}}\n       :main-opts [\"-m\" \"cognitect.test-runner\"]}"
    "coverage" ":coverage {:extra-paths [\"test\"]\n           :extra-deps {cloverage/cloverage {:mvn/version \"1.2.4\"}}\n           :main-opts [\"-m\" \"cloverage.coverage\" \"-p\" \"src\" \"-s\" \"test\"]}"})
 
-(defn- cmd-aliases
-  "Aliases named in a clojure command, e.g. \"clojure -M:test:dev\" -> [\"test\" \"dev\"]."
-  [cmd]
-  (when (re-find #"^\s*clojure\b|^\s*clj\b" cmd)
-    (mapcat #(str/split (second %) #":")
-            (re-seq #"-[MXTA]:([\w.:\-]+)" cmd))))
-
-(defn- input-checks [{:keys [config runtime project-deps project-has-deps? repo main]} input]
+(defn- input-checks [{:keys [config project-deps project-has-deps? repo main]} input]
+  ;; A project without the aliases is not a blocker: the first work item
+  ;; (bb bootstrap) can add them, and inputs run on the commit under review.
   (let [cmd     (get-in config [:inputs input :cmd])
-        docker? (= :docker runtime)
-        problem (if docker? fail warn)]
+        problem warn]
     (if-not cmd
       [(fail (str "reviewer input " input " has no command")
              (str "Add it to :inputs in " conf/config-file ", e.g.\n  " input " {:cmd \"clojure -M:" (name input) "\"}"))]
-      (let [aliases (cmd-aliases cmd)
+      (let [aliases (project/cmd-aliases cmd)
             missing (remove #(contains? (:aliases project-deps) (keyword %)) aliases)]
         (cond
           (and (seq aliases) (not project-has-deps?))
           [(problem (str input " runs \"" cmd "\" but " repo " has no deps.edn on " main)
-                    "Add a deps.edn to the project, or change the command.")]
+                    "bb bootstrap queues a work item that sets it up.")]
 
           (seq missing)
           [(problem (str input " runs \"" cmd "\" but deps.edn has no alias "
                          (str/join ", " (map #(str ":" %) missing)))
-                    (str "Add to :aliases in the project's deps.edn and commit:\n"
-                         (str/join "\n" (map #(get alias-snippets % (str ":" % " {...}")) missing))
-                         "\nor change the command in " conf/config-file "."))]
+                    (str "bb bootstrap queues a work item that adds it, or add it yourself:\n"
+                         (str/join "\n" (map #(get alias-snippets % (str ":" % " {...}")) missing))))]
 
           :else
           [(pass (str input " -> " cmd))])))))
 
-(defn- inputs-section [{:keys [summary runtime] :as state}]
-  (let [inputs (distinct (mapcat :inputs (get-in summary [:defs :agents])))]
+(defn- inputs-section [{:keys [summary runtime config repo] :as state}]
+  (let [inputs (distinct (mapcat :inputs (get-in summary [:defs :agents])))
+        needs  (project/needs config repo inputs)]
     {:checks (cond-> (vec (mapcat #(input-checks state %) inputs))
+               (:fake-work? needs)
+               (conj (warn "FAKE-WORK.md from a trial run is on main"
+                           "bb bootstrap asks the worker to remove it along with the setup."))
                (= :fake runtime)
-               (conj (info "The fake runtime does not run these commands; the Docker runtime does.")))}))
+               (conj (info "The fake runtime does not run these commands; the Docker runtime does.")))
+     :state  {:setup-needed? (project/setup-needed? needs)}}))
 
 (defn- budget-checks [summary config runtime]
   (let [agents (get-in summary [:defs :agents])
@@ -316,7 +307,7 @@
                                 "The daily budget still limits how much work starts each day; your\n"
                                 "plan's usage limits pause the pipeline, and run-next resumes it.")))))))
 
-(defn- queue-next-step [{:keys [summary runtime]}]
+(defn- queue-next-step [{:keys [summary runtime setup-needed?]}]
   (let [items   (:items summary)
         by      (group-by :status items)
         stuck   (first (get by "needs_human"))
@@ -331,6 +322,11 @@
 
       active
       (str "Process the queue (item " (:id active) " is " (:status active) "):\n"
+           "  clojure -M:run run-next")
+
+      (and setup-needed? (= :docker runtime))
+      (str "Have the worker set up the project for the reviewer inputs:\n"
+           "  bb bootstrap\n"
            "  clojure -M:run run-next")
 
       (and (= :fake runtime) (pos? merged))

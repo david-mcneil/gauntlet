@@ -5,7 +5,8 @@
             [babashka.process :as p]
             [borkdude.rewrite-edn :as r]
             [clojure.string :as str]
-            [tools.conf :as conf]))
+            [tools.conf :as conf]
+            [tools.project :as project]))
 
 (defn- edit-config! [f]
   (spit conf/config-file (str (f (r/parse-string (slurp conf/config-file))))))
@@ -154,3 +155,35 @@
                   (println (if (zero? exit)
                              "The credential works."
                              "That request failed. Check the output above, then run bb login again.")))))))))))
+
+(defn bootstrap
+  "Queues a work item that asks the worker to prepare the project for the
+  reviewer input commands (deps.edn, aliases, a first test)."
+  [_]
+  (let [{:keys [config]} (conf/read-config)
+        s (project/summary)]
+    (if-let [err (or (:config-error s) (get-in s [:defs :error]))]
+      (println "Fix the setup first (run bb doctor):" err)
+      (let [inputs  (distinct (mapcat :inputs (get-in s [:defs :agents])))
+            needs   (project/needs config (conf/resolve-path (:repo config)) inputs)
+            pending (first (filter #(and (= project/setup-title (:title %))
+                                         (not= "merged" (:status %)))
+                                   (:items s)))]
+        (cond
+          pending
+          (println (str "Item " (:id pending) " (" project/setup-title ") is already " (:status pending)
+                        ". Run: clojure -M:run run-next"))
+
+          (not (project/setup-needed? needs))
+          (println "The project already has what the reviewer input commands need. Nothing to queue.")
+
+          :else
+          (let [spec (project/setup-spec needs)
+                {:keys [exit out err]} (p/shell {:in spec :out :string :err :string :continue true}
+                                                "clojure" "-M:run" "add" project/setup-title "-")]
+            (if (zero? exit)
+              (do (println (str/trim out) "-" project/setup-title)
+                  (println "\nThe worker will be asked to:\n")
+                  (println spec)
+                  (println "\nNext: clojure -M:run run-next"))
+              (println "Could not queue the item:" err))))))))

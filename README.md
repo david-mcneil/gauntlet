@@ -31,6 +31,7 @@ Other tasks:
 bb runtime fake|docker    # switch runtimes; docker also sets :user to your uid:gid
 bb auth subscription|api-key   # Docker runtime: use your Claude plan or an API key
 bb login                  # get the token or key and store it for the Docker runtime
+bb bootstrap              # queue a work item that sets up the project for the reviewer inputs
 bb build-image            # build the agent image from docker/agent
 bb tasks                  # list tasks
 ```

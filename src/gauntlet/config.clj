@@ -24,8 +24,15 @@
                         [:env {:optional true} [:vector :string]]
                         [:host-path-map {:optional true} [:map-of :string :string]]]]]]])
 
+(defn expand-home
+  "Replaces a leading ~ with the user's home directory."
+  [path]
+  (if (or (= "~" path) (.startsWith ^String path "~/"))
+    (str (System/getProperty "user.home") (subs path 1))
+    path))
+
 (defn- absolute [base path]
-  (let [f (io/file path)]
+  (let [f (io/file (expand-home path))]
     (.getCanonicalPath (if (.isAbsolute f) f (io/file base path)))))
 
 (defn resolve-paths

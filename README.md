@@ -10,20 +10,44 @@ Agents are defined in a separate repository (`../agent-defs`), read at a
 pinned ref. Every run records which definitions commit, agent version and
 model produced it.
 
-## Quick start
+## Getting started
+
+The setup scripts need [babashka](https://babashka.org).
 
 ```
-cp gauntlet.example.edn gauntlet.edn     # edit :repo and :defs
-clojure -M:run agents                    # check the definitions load
-clojure -M:run add "Title" spec.md       # queue a work item
-clojure -M:run run-next                  # process it
-clojure -M:run show 1                    # runs, verdicts, findings
-clojure -M:test                          # tests (fake runtime, no API calls)
+bb init ~/projects/myproject     # create gauntlet.edn pointing at the project repo
+bb doctor                        # check everything; prints the next step
+```
+
+`bb doctor` checks the tools, the config, the project repo, the agent
+definitions, the runtime, the reviewer input commands, the budget and the
+queue, in that order. It stops at the first problem and prints how to fix it.
+When nothing is wrong, it says what to do next with the queue. Run it again
+after each step.
+
+Other tasks:
+
+```
+bb runtime fake|docker    # switch runtimes; docker also sets :user to your uid:gid
+bb build-image            # build the agent image from docker/agent
+bb tasks                  # list tasks
+```
+
+Working with the queue:
+
+```
+echo "Describe the change" | clojure -M:run add "Title" -
+clojure -M:run run-next          # process the next item
+clojure -M:run list
+clojure -M:run show 1            # runs, verdicts, findings
+clojure -M:run agents            # loaded agent definitions and versions
+clojure -M:test                  # tests (fake runtime, no API calls)
 ```
 
 With `:runtime {:type :fake}` the pipeline runs end to end with stand-in
-agents that commit a dummy change and approve. Use it to try the flow
-without spending anything.
+agents that commit a placeholder change and approve. They still merge into
+the project's main branch, so use a throwaway repo or a trial branch
+(`:main-branch`).
 
 ## Pipeline
 
@@ -123,6 +147,8 @@ src/gauntlet/git.clj              clones, fetch, fast-forward
 src/gauntlet/runtime.clj          AgentRuntime protocol
 src/gauntlet/runtime/docker.clj   Claude Code in a container
 src/gauntlet/runtime/fake.clj     stand-in agents for tests and dry runs
+bb/tools/doctor.clj               setup checks (bb doctor)
+bb/tools/setup.clj                bb init, bb runtime, bb build-image
 ```
 
 ## Tables

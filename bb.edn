@@ -1,0 +1,12 @@
+{:paths ["bb"]
+ :deps  {borkdude/rewrite-edn {:mvn/version "0.4.9"}}
+ :tasks
+ {:requires    ([tools.setup :as setup])
+  doctor      {:doc  "Check the setup and say what to do next"
+               :task (exec 'tools.doctor/-main)}
+  init        {:doc  "Create gauntlet.edn for a project: bb init <project-repo>"
+               :task (setup/init *command-line-args*)}
+  runtime     {:doc  "Switch the agent runtime: bb runtime fake|docker"
+               :task (setup/set-runtime *command-line-args*)}
+  build-image {:doc  "Build the Docker image that agents run in"
+               :task (setup/build-image)}}}

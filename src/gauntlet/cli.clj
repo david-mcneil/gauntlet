@@ -20,7 +20,8 @@
   show <id>                 show an item with its runs, verdicts and findings
   requeue <id>              return a needs_human item to the step it failed in
   agents                    show the loaded agent definitions and their versions
-  spent                     show today's spend")
+  spent                     show today's spend
+  summary                   print setup and queue state as EDN (used by bb doctor)")
 
 (defn- load-env []
   (let [cfg (config/load-config (or (System/getenv "GAUNTLET_CONFIG") "gauntlet.edn"))]
@@ -119,11 +120,29 @@
                    (double (db/spent-since ds (db/start-of-today)))
                    (double (:daily-budget-usd config)))))
 
+(defmethod command "summary" [_ {:keys [ds config]}]
+  ;; Machine-readable state for bb doctor. Printed as EDN.
+  (prn {:defs  (try
+                 (let [d (defs/load-defs (get-in config [:defs :repo]) (get-in config [:defs :ref]))]
+                   {:commit (:commit d)
+                    :agents (vec (for [a (cons (defs/worker d) (defs/reviewers d))]
+                                   (select-keys a [:id :role :order :model :max-budget-usd :inputs])))})
+                 (catch Exception e {:error (.getMessage e)}))
+        :items (mapv #(select-keys % [:id :status :title :note]) (db/items ds))
+        :spent (double (db/spent-since ds (db/start-of-today)))}))
+
 (defmethod command :default [& _]
   (println usage))
 
 (defn -main [& [cmd & args]]
-  (if (or (nil? cmd) (#{"-h" "--help" "help"} cmd))
+  (cond
+    (or (nil? cmd) (#{"-h" "--help" "help"} cmd))
     (println usage)
+
+    (= "summary" cmd)
+    (try (command cmd (load-env))
+         (catch Exception e (prn {:config-error (.getMessage e)})))
+
+    :else
     (apply command cmd (load-env) args))
   (shutdown-agents))

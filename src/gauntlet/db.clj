@@ -49,6 +49,7 @@
       input_sha      TEXT NOT NULL,
       output_sha     TEXT,
       status         TEXT NOT NULL,
+      summary        TEXT,
       error          TEXT,
       cost_usd       REAL NOT NULL DEFAULT 0,
       input_tokens   INTEGER,
@@ -78,11 +79,20 @@
 
 (def ^:private opts {:builder-fn rs/as-unqualified-kebab-maps})
 
+(defn- migrate!
+  "Adds columns introduced after a database was created."
+  [ds]
+  (let [columns (set (map :name (jdbc/execute! ds ["PRAGMA table_info(runs)"]
+                                               {:builder-fn rs/as-unqualified-maps})))]
+    (when-not (columns "summary")
+      (jdbc/execute! ds ["ALTER TABLE runs ADD COLUMN summary TEXT"]))))
+
 (defn open
   "Returns a datasource for the SQLite file at path, creating the schema."
   [path]
   (let [ds (jdbc/get-datasource {:jdbcUrl (str "jdbc:sqlite:" path "?foreign_keys=on")})]
     (doseq [stmt schema] (jdbc/execute! ds [stmt]))
+    (migrate! ds)
     ds))
 
 (defn- insert! [ds table row]

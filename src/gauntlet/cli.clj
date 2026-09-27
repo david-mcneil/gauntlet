@@ -23,6 +23,7 @@
   watch [poll-seconds]      keep processing, waiting for new items when the queue is empty
   list                      list work items
   show <id>                 show an item with its runs, verdicts and findings
+  trace <id>                show the path an item took through the agents
   requeue <id>              return a needs_human item to the step it failed in
   agents                    show the loaded agent definitions and their versions
   spent                     show today's spend
@@ -111,6 +112,21 @@
       (run! println (views/show-lines item (db/runs ds id)
                                       (map #(assoc % :findings (db/findings ds (:id %)))
                                            (db/verdicts ds id))))
+      (println "no item" id))))
+
+(defn color?
+  "Color output when writing to a terminal, unless NO_COLOR is set."
+  []
+  (and (System/console) (nil? (System/getenv "NO_COLOR"))))
+
+(defmethod command "trace" [_ {:keys [ds]} id]
+  (let [id (parse-long id)]
+    (if-let [item (db/item ds id)]
+      (run! println (views/trace-lines item (db/runs ds id)
+                                       (map #(assoc % :findings (db/findings ds (:id %)))
+                                            (db/verdicts ds id))
+                                       (db/events ds id)
+                                       (color?)))
       (println "no item" id))))
 
 (defmethod command "requeue" [_ {:keys [ds]} id]

@@ -179,7 +179,7 @@
           (to-needs-human ctx item (fail-run! ds run-id error))
 
           (= "blocked" (:status value))
-          (do (db/finish-run! ds run-id {:status "ok"})
+          (do (db/finish-run! ds run-id {:status "ok" :summary (:summary value)})
               (to-needs-human ctx item (str "worker blocked: " (:summary value))))
 
           :else
@@ -192,7 +192,7 @@
               (to-needs-human ctx item (fail-run! ds run-id "worker rewrote history below the base commit"))
 
               :else
-              (do (db/finish-run! ds run-id {:status "ok" :output_sha head})
+              (do (db/finish-run! ds run-id {:status "ok" :output_sha head :summary (:summary value)})
                   (emit ctx {:type :worker-done :item-id (:id item) :commit head
                              :summary (:summary value)})
                   (db/update-item! ds (:id item) {:status "reviewing" :head_sha head :note nil})

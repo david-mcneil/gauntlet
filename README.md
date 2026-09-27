@@ -42,6 +42,7 @@ Working with the queue:
 echo "Describe the change" | bb add "Title" -
 bb list
 bb show 1                        # runs, verdicts, findings
+bb trace 1                       # the path the item took through the agents
 bb requeue 1                     # retry a needs_human item
 bb spent                         # today's spend against the daily budget
 
@@ -127,6 +128,36 @@ credential is rejected it exits, since retrying will not help. Items that end
 in `needs_human` are reported and it moves on to the next one. It reloads the
 agent definitions before each item, so committed changes to agent-defs apply
 without restarting it.
+
+### Seeing an item's path
+
+`bb trace <id>` (or `clojure -M:run trace <id>`) shows which agents worked on
+an item, in what order, and each time the work went back to the worker. The
+flow section has one line per pass; a pass starts each time the worker runs:
+
+```
+#5 basic calc   merged at 7bc76c4
+2 worker run(s), 6 review(s), ~$0.62, 7m27s since queued
+
+flow (one line per pass; ↺ = sent back to the worker):
+   1  worker → comments ✗  ↺
+   2  worker → comments ✓ → language ✓ → architecture ✓ → factoring ✓ → test-coverage ✓ ⇒ merged
+
+pass 1
+  ├ worker         ● implemented  4896f0c → 811b666   1m28s ~$0.14
+  │     "Added add, subtract and multiply with tests."
+  └ comments       ✗ REJECT       811b666               19s ~$0.03
+      [blocking] C1 src/gauntlet/calculator.clj:4 Public function 'add' is missing a docstring. ...
+  ↺ back to the worker with 3 blocking finding(s)
+
+pass 2
+  ...
+```
+
+Below the flow, each pass lists every run with its commits, time and
+estimated cost, the worker's summary of its change, and the findings of any
+rejection. Errors, interruptions, `needs_human` stops and requeues appear
+where they happened. Colors are used on a terminal unless `NO_COLOR` is set.
 
 ### Stopping and restarting
 

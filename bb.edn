@@ -9,6 +9,9 @@
   show        {:doc  "Show an item with its runs, verdicts and findings: bb show <id>"
                :requires ([tools.queue :as queue])
                :task (queue/show *command-line-args*)}
+  trace       {:doc  "Show the path an item took through the agents: bb trace <id>"
+               :requires ([tools.queue :as queue])
+               :task (queue/trace *command-line-args*)}
   add         {:doc  "Queue a work item: bb add <title> <spec-file>  (- reads stdin)"
                :requires ([tools.queue :as queue])
                :task (queue/add *command-line-args*)}

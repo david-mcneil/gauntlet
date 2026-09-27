@@ -68,6 +68,22 @@
                (assoc v :findings (query db "SELECT * FROM findings WHERE verdict_id = ? ORDER BY id"
                                          (:id v)))))))))
 
+(defn trace [[id]]
+  (let [db   (db-path)
+        id   (parse-id id)
+        item (first (query db "SELECT * FROM work_items WHERE id = ?" id))]
+    (if-not item
+      (println "no item" id)
+      (run! println
+            (views/trace-lines
+             item
+             (query db "SELECT * FROM runs WHERE work_item_id = ? ORDER BY id" id)
+             (for [v (query db "SELECT * FROM verdicts WHERE work_item_id = ? ORDER BY id" id)]
+               (assoc v :findings (query db "SELECT * FROM findings WHERE verdict_id = ? ORDER BY id"
+                                         (:id v))))
+             (query db "SELECT * FROM events WHERE work_item_id = ? ORDER BY id" id)
+             (and (System/console) (nil? (System/getenv "NO_COLOR"))))))))
+
 (defn spent [_]
   (let [total (:total (first (query (db-path) "SELECT SUM(cost_usd) AS total FROM runs WHERE started_at >= ?"
                                     (start-of-today))))]

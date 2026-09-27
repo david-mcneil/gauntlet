@@ -10,6 +10,9 @@ Agents are defined in a separate repository (`../agent-defs`), read at a
 pinned ref. Every run records which definitions commit, agent version and
 model produced it.
 
+DESIGN.md explains why gauntlet is built the way it is; TODO.md records the
+current state and open work.
+
 ## Getting started
 
 The setup scripts need [babashka](https://babashka.org).

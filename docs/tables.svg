@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="520" viewBox="0 0 940 520" role="img" aria-label="Database tables: work_items, events, runs, verdicts, findings and their foreign keys">
+<style>svg{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}</style>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<defs><marker id="er-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5b6573"/></marker></defs>
+<rect x="20" y="150" width="190" height="223" rx="7" fill="#fff" stroke="#2f8a4c" stroke-width="1.5"/>
+<path d="M20,157 a7,7 0 0 1 7,-7 h176 a7,7 0 0 1 7,7 v21 h-190 z" fill="#eaf6ee" stroke="#2f8a4c" stroke-width="1.5"/>
+<text x="30" y="169" font-size="14" font-weight="600">work_items</text>
+<text x="30" y="193" font-size="12" font-family="ui-monospace,Menlo,monospace" font-weight="700">id</text><text x="200" y="193" font-size="10" text-anchor="end" fill="#5b6573">PK</text>
+<text x="30" y="210" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">title</text>
+<text x="30" y="227" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">spec</text>
+<text x="30" y="244" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">status</text>
+<text x="30" y="261" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">branch</text>
+<text x="30" y="278" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">base_sha</text>
+<text x="30" y="295" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">head_sha</text>
+<text x="30" y="312" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">merged_sha</text>
+<text x="30" y="329" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">round</text>
+<text x="30" y="346" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">note</text>
+<text x="30" y="363" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">created_at, updated_at</text>
+<rect x="270" y="16" width="200" height="138" rx="7" fill="#fff" stroke="#5b6573" stroke-width="1.5"/>
+<path d="M270,23 a7,7 0 0 1 7,-7 h186 a7,7 0 0 1 7,7 v21 h-200 z" fill="#f6f8fa" stroke="#5b6573" stroke-width="1.5"/>
+<text x="280" y="35" font-size="14" font-weight="600">events</text>
+<text x="280" y="59" font-size="12" font-family="ui-monospace,Menlo,monospace" font-weight="700">id</text><text x="460" y="59" font-size="10" text-anchor="end" fill="#5b6573">PK</text>
+<text x="280" y="76" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#3a78c2">work_item_id</text><text x="460" y="76" font-size="10" text-anchor="end" fill="#3a78c2">FK</text>
+<text x="280" y="93" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">from_status</text>
+<text x="280" y="110" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">to_status</text>
+<text x="280" y="127" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">note</text>
+<text x="280" y="144" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">at</text>
+<rect x="270" y="176" width="220" height="325" rx="7" fill="#fff" stroke="#c47a1d" stroke-width="1.5"/>
+<path d="M270,183 a7,7 0 0 1 7,-7 h206 a7,7 0 0 1 7,7 v21 h-220 z" fill="#fdf3e6" stroke="#c47a1d" stroke-width="1.5"/>
+<text x="280" y="195" font-size="14" font-weight="600">runs</text>
+<text x="280" y="219" font-size="12" font-family="ui-monospace,Menlo,monospace" font-weight="700">id</text><text x="480" y="219" font-size="10" text-anchor="end" fill="#5b6573">PK</text>
+<text x="280" y="236" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#3a78c2">work_item_id</text><text x="480" y="236" font-size="10" text-anchor="end" fill="#3a78c2">FK</text>
+<text x="280" y="253" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">round</text>
+<text x="280" y="270" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">agent</text>
+<text x="280" y="287" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">role</text>
+<text x="280" y="304" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">defs_commit</text>
+<text x="280" y="321" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">agent_version</text>
+<text x="280" y="338" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">model</text>
+<text x="280" y="355" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">input_sha</text>
+<text x="280" y="372" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">output_sha</text>
+<text x="280" y="389" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">status</text>
+<text x="280" y="406" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">error</text>
+<text x="280" y="423" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">cost_usd</text>
+<text x="280" y="440" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">input_tokens, output_tokens</text>
+<text x="280" y="457" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">summary</text>
+<text x="280" y="474" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">run_dir</text>
+<text x="280" y="491" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">started_at, ended_at</text>
+<rect x="540" y="176" width="185" height="172" rx="7" fill="#fff" stroke="#3a78c2" stroke-width="1.5"/>
+<path d="M540,183 a7,7 0 0 1 7,-7 h171 a7,7 0 0 1 7,7 v21 h-185 z" fill="#e8f1fb" stroke="#3a78c2" stroke-width="1.5"/>
+<text x="550" y="195" font-size="14" font-weight="600">verdicts</text>
+<text x="550" y="219" font-size="12" font-family="ui-monospace,Menlo,monospace" font-weight="700">id</text><text x="715" y="219" font-size="10" text-anchor="end" fill="#5b6573">PK</text>
+<text x="550" y="236" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#3a78c2">run_id</text><text x="715" y="236" font-size="10" text-anchor="end" fill="#3a78c2">FK</text>
+<text x="550" y="253" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#3a78c2">work_item_id</text><text x="715" y="253" font-size="10" text-anchor="end" fill="#3a78c2">FK</text>
+<text x="550" y="270" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">commit_sha</text>
+<text x="550" y="287" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">agent</text>
+<text x="550" y="304" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">verdict</text>
+<text x="550" y="321" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">summary</text>
+<text x="550" y="338" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">created_at</text>
+<rect x="760" y="176" width="165" height="155" rx="7" fill="#fff" stroke="#3a78c2" stroke-width="1.5"/>
+<path d="M760,183 a7,7 0 0 1 7,-7 h151 a7,7 0 0 1 7,7 v21 h-165 z" fill="#e8f1fb" stroke="#3a78c2" stroke-width="1.5"/>
+<text x="770" y="195" font-size="14" font-weight="600">findings</text>
+<text x="770" y="219" font-size="12" font-family="ui-monospace,Menlo,monospace" font-weight="700">id</text><text x="915" y="219" font-size="10" text-anchor="end" fill="#5b6573">PK</text>
+<text x="770" y="236" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#3a78c2">verdict_id</text><text x="915" y="236" font-size="10" text-anchor="end" fill="#3a78c2">FK</text>
+<text x="770" y="253" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">severity</text>
+<text x="770" y="270" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">file</text>
+<text x="770" y="287" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">line</text>
+<text x="770" y="304" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">rule</text>
+<text x="770" y="321" font-size="12" font-family="ui-monospace,Menlo,monospace" fill="#1d232b">message</text>
+<path d="M270,72.5 C240,72.5 240,189.5 212,189.5" fill="none" stroke="#5b6573" stroke-width="1.3" marker-end="url(#er-ar)"/>
+<path d="M270,232.5 C240,232.5 240,189.5 212,189.5" fill="none" stroke="#5b6573" stroke-width="1.3" marker-end="url(#er-ar)"/>
+<path d="M540,232.5 C515,232.5 515,215.5 492,215.5" fill="none" stroke="#5b6573" stroke-width="1.3" marker-end="url(#er-ar)"/>
+<path d="M540,249.5 L515,249.5 L515,164 L240,164 L240,183.5 Q240,189.5 234,189.5 L212,189.5" fill="none" stroke="#5b6573" stroke-width="1.3" marker-end="url(#er-ar)"/>
+<path d="M760,232.5 C740,232.5 740,215.5 727,215.5" fill="none" stroke="#5b6573" stroke-width="1.3" marker-end="url(#er-ar)"/>
+</svg>

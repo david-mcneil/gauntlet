@@ -9,8 +9,43 @@ commit.
 Agents are defined in a separate repository, read at a pinned ref. Every run
 records which definitions commit, agent version and model produced it.
 
-DESIGN.md explains why gauntlet is built the way it is; TODO.md records the
-current state and open work.
+![Pipeline: a queued item goes to the worker, then through the reviewers in order, then to main. A rejection sends the blocking findings back to the worker.](docs/pipeline.svg)
+
+## Why
+
+A single coding agent asked to "implement this and make it good" has to hold
+every standard in mind at once: the task, the house style, the architecture
+rules, the test expectations. In practice it satisfies some and misses others,
+and a person ends up doing the review. A long prompt that lists every rule
+makes this worse, because each rule gets less attention. There is also no
+record of which instructions an agent ran under, which model it used, or what
+was checked before a change landed.
+
+Gauntlet splits the work into one agent that writes and any number that judge.
+Each reviewer has a short context about one concern and a strict output
+format: a verdict and a list of findings, each `blocking` or `advisory`. A
+change is accepted only when it gets through all of them in sequence.
+
+- The reviewers are an open set. Each one is a directory of prompt files and an
+  entry in `agents.edn`; adding, removing or reordering reviewers is an edit to
+  that file. The starting definitions have five: comments, language,
+  architecture, factoring and test coverage.
+- Each reviewer is cheap and focused. Simple checks can run on a small model and
+  judgment-heavy ones on a larger one.
+- Cheap checks run first, and the first rejection ends the round, so expensive
+  reviewers do not spend money on a change that is going back anyway.
+- Every verdict is stored against the commit it assessed.
+
+> [!NOTE]
+> The worker never talks to a person. The spec it is given is the only
+> description of the work, and the reviewers judge the change against the same
+> spec. A good spec says what should be true when the work is done.
+
+[docs/overview.md](docs/overview.md) goes further, with examples taken from a
+real queue: a complete agent definition, how agents reference context files,
+what a rejection looks like and how it reaches the worker, the database tables,
+and one item that took seven passes to merge. DESIGN.md explains why gauntlet is
+built the way it is; TODO.md records the current state and open work.
 
 ## Getting started
 

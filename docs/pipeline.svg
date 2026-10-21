@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="300" viewBox="0 0 940 300" role="img" aria-label="Pipeline: queued, worker implements, reviewers in order, merged; a rejection loops back to the worker; failures go to needs_human">
+<style>svg{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}</style>
+<rect width="100%" height="100%" fill="#ffffff"/>
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#5b6573"/>
+      </marker>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#c0392b"/>
+      </marker>
+    </defs>
+
+    <rect x="20" y="100" width="90" height="56" rx="8" fill="#eaf6ee" stroke="#2f8a4c" stroke-width="1.5"/>
+    <text x="65" y="124" text-anchor="middle" font-size="14" font-weight="600">queue</text>
+    <text x="65" y="142" text-anchor="middle" font-size="11.5" fill="#5b6573">SQLite</text>
+
+    <rect x="145" y="100" width="110" height="56" rx="8" fill="#fdf3e6" stroke="#c47a1d" stroke-width="1.5"/>
+    <text x="200" y="124" text-anchor="middle" font-size="14" font-weight="600">worker</text>
+    <text x="200" y="142" text-anchor="middle" font-size="11.5" fill="#5b6573">commits on branch</text>
+
+    <rect x="285" y="78" width="520" height="100" rx="10" fill="#f6f8fa" stroke="#d5dae1" stroke-dasharray="5 4"/>
+    <text x="545" y="96" text-anchor="middle" font-size="12" fill="#5b6573">the gauntlet: whatever reviewers agents.edn lists, run by :order (the current five shown)</text>
+
+    <g font-size="12.5" font-weight="600" text-anchor="middle">
+      <rect x="300" y="108" width="86" height="48" rx="7" fill="#e8f1fb" stroke="#3a78c2" stroke-width="1.5"/>
+      <text x="343" y="137">comments</text>
+      <rect x="402" y="108" width="86" height="48" rx="7" fill="#e8f1fb" stroke="#3a78c2" stroke-width="1.5"/>
+      <text x="445" y="137">language</text>
+      <rect x="504" y="108" width="86" height="48" rx="7" fill="#e8f1fb" stroke="#3a78c2" stroke-width="1.5"/>
+      <text x="547" y="137">architecture</text>
+      <rect x="606" y="108" width="86" height="48" rx="7" fill="#e8f1fb" stroke="#3a78c2" stroke-width="1.5"/>
+      <text x="649" y="137">factoring</text>
+      <rect x="708" y="108" width="86" height="48" rx="7" fill="#e8f1fb" stroke="#3a78c2" stroke-width="1.5"/>
+      <text x="751" y="131">test</text>
+      <text x="751" y="146">coverage</text>
+    </g>
+
+    <rect x="835" y="100" width="85" height="56" rx="8" fill="#eaf6ee" stroke="#2f8a4c" stroke-width="1.5"/>
+    <text x="877" y="124" text-anchor="middle" font-size="14" font-weight="600">main</text>
+    <text x="877" y="142" text-anchor="middle" font-size="11.5" fill="#5b6573">fast-forward</text>
+
+    <g stroke="#5b6573" stroke-width="1.5" fill="none" marker-end="url(#ar)">
+      <line x1="110" y1="128" x2="143" y2="128"/>
+      <line x1="255" y1="128" x2="298" y2="128"/>
+      <line x1="386" y1="132" x2="400" y2="132"/>
+      <line x1="488" y1="132" x2="502" y2="132"/>
+      <line x1="590" y1="132" x2="604" y2="132"/>
+      <line x1="692" y1="132" x2="706" y2="132"/>
+      <line x1="805" y1="128" x2="833" y2="128"/>
+    </g>
+    <text x="819" y="118" text-anchor="middle" font-size="11" fill="#2f8a4c">all ✓</text>
+
+    <path d="M545,178 C545,240 200,240 200,158" stroke="#c0392b" stroke-width="1.6" fill="none" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+    <text x="372" y="250" text-anchor="middle" font-size="12" fill="#c0392b">first ✗ ends the round; blocking findings go back to the worker</text>
+
+    <rect x="345" y="18" width="400" height="34" rx="7" fill="#fdecec" stroke="#c0392b" stroke-width="1.2"/>
+    <text x="545" y="40" text-anchor="middle" font-size="12.5">needs_human: blocked, agent failed, bad output, round limit, main moved</text>
+    <path d="M200,100 C200,60 300,35 343,35" stroke="#c0392b" stroke-width="1.2" fill="none" marker-end="url(#arr)"/>
+
+    <text x="470" y="282" text-anchor="middle" font-size="12" fill="#5b6573">Every agent run is a fresh container with a fresh clone. Only the orchestrator writes to SQLite and the project repo.</text>
+  </svg>

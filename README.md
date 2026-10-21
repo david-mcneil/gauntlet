@@ -407,3 +407,8 @@ bb/tools/setup.clj                bb init, bb runtime, bb build-image
 `work_items`, `events` (status history), `runs` (one per agent execution,
 with defs commit, agent version, model, input and output commit, cost),
 `verdicts` (one per reviewer run, keyed by commit) and `findings`.
+
+![Database tables: work_items, events, runs, verdicts and findings, with arrows from each foreign key to the table it references.](docs/tables.svg)
+
+[docs/overview.md](docs/overview.md#what-is-recorded-the-database-tables)
+describes what each table is used for.

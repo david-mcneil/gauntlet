@@ -6,14 +6,27 @@ own branch, then a sequence of reviewer agents assesses the resulting commit.
 The branch is merged to main only when every reviewer approves that exact
 commit.
 
-Agents are defined in a separate repository (`../agent-defs`), read at a
-pinned ref. Every run records which definitions commit, agent version and
-model produced it.
+Agents are defined in a separate repository, read at a pinned ref. Every run
+records which definitions commit, agent version and model produced it.
 
 DESIGN.md explains why gauntlet is built the way it is; TODO.md records the
 current state and open work.
 
 ## Getting started
+
+Gauntlet is two repositories: this one, and
+[gauntlet-agent-defs](https://github.com/david-mcneil/gauntlet-agent-defs),
+which holds the agent prompts. The default config expects them side by side,
+with the definitions in a directory named `agent-defs`:
+
+```
+git clone https://github.com/david-mcneil/gauntlet.git orchestrator
+git clone https://github.com/david-mcneil/gauntlet-agent-defs.git agent-defs
+cd orchestrator
+```
+
+The definitions repository is a starting point. Its rules are placeholders;
+replace them with your project's own and commit them there.
 
 The setup scripts need [babashka](https://babashka.org).
 
@@ -329,9 +342,9 @@ Other settings:
 - Reviewer inputs (`:inputs` in the config, such as test results and coverage)
   run in the same image, in their own clone of the commit under review.
 
-The command line construction is covered by tests and the mounts have been
-checked against a real Docker daemon, but a full run with Claude Code has not
-been done yet.
+The command line construction is covered by tests, the mounts have been
+checked against a real Docker daemon, and full runs with Claude Code have been
+done with `:auth :subscription`.
 
 ## Project repo
 
